@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="backend/MyFantasy.Api/MyFantasy.Api.csproj" />
+  </Folder>
+</Solution>

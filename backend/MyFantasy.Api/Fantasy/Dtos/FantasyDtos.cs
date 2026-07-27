@@ -1,0 +1,170 @@
+using System.Text.Json.Serialization;
+
+namespace MyFantasy.Api.Fantasy.Dtos;
+
+// ---------------------------------------------------------------------------
+// DTOs de la API de LaLiga Fantasy. Permisivos a propósito: las formas reales
+// tienen envoltorios variables (data / elements / leagues) y campos opcionales.
+// Los envoltorios se resuelven en FantasyApiClient con ListEnvelope<T>.
+// ---------------------------------------------------------------------------
+
+public class TeamRefDto
+{
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? ShortName { get; set; }
+    public string? Slug { get; set; }
+    public string? BadgeColor { get; set; }
+}
+
+public class ManagerDto
+{
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? Id { get; set; }
+    public string? ManagerName { get; set; }
+}
+
+/// <summary>
+/// Imágenes del jugador. La API las da bajo `images.transparent["256x256"]`
+/// (recorte PNG) o un `image`/`images.player` plano (confirmado en la app de
+/// referencia, responseAdapters.normalizePlayer).
+/// </summary>
+public class PlayerImagesDto
+{
+    public PlayerImageSizesDto? Transparent { get; set; }
+    public string? Player { get; set; }
+
+    public string? Best =>
+        Transparent?.Size256 ?? Transparent?.Size512 ?? Transparent?.Size128 ?? Player;
+}
+
+public class PlayerImageSizesDto
+{
+    [JsonPropertyName("256x256")] public string? Size256 { get; set; }
+    [JsonPropertyName("128x128")] public string? Size128 { get; set; }
+    [JsonPropertyName("512x512")] public string? Size512 { get; set; }
+}
+
+/// <summary>Jugador del feed de mercado (/players).</summary>
+public class FantasyPlayerDto
+{
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? Nickname { get; set; }
+    public int? PositionId { get; set; }
+    public long? MarketValue { get; set; }
+    public double? Points { get; set; }
+    public TeamRefDto? Team { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? TeamId { get; set; }
+    public string? Image { get; set; }
+    public PlayerImagesDto? Images { get; set; }
+
+    public string? ResolvedTeamName => Team?.Name;
+    public string? DisplayName => string.IsNullOrWhiteSpace(Name) ? Nickname : Name;
+    public string? ResolvedImageUrl => Image ?? Images?.Best;
+}
+
+/// <summary>Núcleo de jugador embebido en la plantilla (playerMaster).</summary>
+public class PlayerMasterDto
+{
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? Nickname { get; set; }
+    public int? PositionId { get; set; }
+    public long? MarketValue { get; set; }
+    public TeamRefDto? Team { get; set; }
+    public string? Image { get; set; }
+    public PlayerImagesDto? Images { get; set; }
+
+    public string? ResolvedImageUrl => Image ?? Images?.Best;
+}
+
+/// <summary>
+/// Entrada de plantilla dentro del equipo. La API puede exponer el precio de
+/// compra bajo varios nombres; los leemos todos y el servicio de sync decide.
+/// </summary>
+public class SquadPlayerDto
+{
+    public PlayerMasterDto? PlayerMaster { get; set; }
+    public ManagerDto? Manager { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? ManagerId { get; set; }
+
+    // Candidatos a "precio de compra" (sin confirmar cuál trae la API real).
+    public long? PurchasePrice { get; set; }
+    public long? BuyPrice { get; set; }
+    public long? BuyoutClause { get; set; }
+
+    public bool? IsShielded { get; set; }
+    public long? MarketValue { get; set; }
+    public int? PositionId { get; set; }
+
+    /// <summary>Primer precio de compra disponible de la API, o null si no viene.</summary>
+    public long? ResolvedPurchasePrice => PurchasePrice ?? BuyPrice;
+}
+
+/// <summary>Datos del equipo del usuario en una liga (/leagues/{id}/teams/{teamId}).</summary>
+public class TeamSquadDto
+{
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public long? TeamValue { get; set; }
+    public ManagerDto? Manager { get; set; }
+    public List<SquadPlayerDto>? Players { get; set; }
+}
+
+public class LeagueDto
+{
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public bool? IsDefault { get; set; }
+}
+
+/// <summary>Entrada de clasificación; se usa para localizar el teamId del usuario.</summary>
+public class StandingEntryDto
+{
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? UserId { get; set; }
+    public TeamStandingDto? Team { get; set; }
+}
+
+public class TeamStandingDto
+{
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? UserId { get; set; }
+    public ManagerDto? Manager { get; set; }
+    public long? TeamValue { get; set; }
+}
+
+public class UserMeDto
+{
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? Id { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? UserId { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? ManagerId { get; set; }
+    public string? ManagerName { get; set; }
+    public string? Username { get; set; }
+
+    public string? AnyId => Id ?? UserId ?? ManagerId;
+}
+
+public class TeamMoneyDto
+{
+    public long? TeamMoney { get; set; }
+    public long? Amount { get; set; }
+    public long Value => TeamMoney ?? Amount ?? 0;
+}

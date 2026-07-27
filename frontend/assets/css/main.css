@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body, #__nuxt {
+  height: 100%;
+}
+
+body {
+  @apply bg-ink-900 text-white font-sans antialiased;
+  background-image: radial-gradient(1200px 600px at 50% -200px, rgba(255, 61, 77, 0.10), transparent 70%);
+  background-attachment: fixed;
+}
+
+@layer components {
+  /* Etiqueta de sección tipo "MIS LIGAS" */
+  .section-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-muted;
+  }
+
+  /* Tarjeta blanca sobre fondo oscuro (estilo app oficial) */
+  .card {
+    @apply bg-white text-ink-900 rounded-card shadow-card;
+  }
+
+  /* Panel oscuro elevado (para tablas/gráficos sobre el fondo) */
+  .panel {
+    @apply bg-ink-800 rounded-card border border-white/5;
+  }
+
+  .btn-brand {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5
+           font-semibold text-white transition hover:bg-brand-600 active:scale-[.98]
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10
+           bg-white/5 px-4 py-2.5 font-medium text-white/90 transition hover:bg-white/10;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+}
+
+/* Scrollbar discreta y coherente con el tema oscuro */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.2); }

@@ -1,0 +1,37 @@
+@host = http://localhost:5298
+
+### Salud
+GET {{host}}/api/health
+
+### Sincronizar (snapshot de precios + diff de plantilla). Llamar al refrescar.
+POST {{host}}/api/sync
+
+### Pestaña 1 — Ligas
+GET {{host}}/api/leagues
+
+### Cambiar liga por defecto
+PUT {{host}}/api/leagues/1/default
+
+### Pestaña 2 — Jugadores (plantilla activa)
+GET {{host}}/api/players
+
+### Editar precio de compra (fallback manual)
+PUT {{host}}/api/players/holdings/1/purchase-price
+Content-Type: application/json
+
+{ "purchasePrice": 5000000 }
+
+### Pestaña 3 — Historial: sin vender
+GET {{host}}/api/history/holdings
+
+### Pestaña 3 — Historial: vendidos (congelados)
+GET {{host}}/api/history/sales
+
+### Ajustar precio de venta (recalcula solo G/P)
+PUT {{host}}/api/history/sales/1/sale-price
+Content-Type: application/json
+
+{ "salePrice": 6000000 }
+
+### Pestaña 4 — Stats
+GET {{host}}/api/stats

@@ -1,0 +1,26 @@
+# --- .NET ---
+bin/
+obj/
+*.user
+[Bb]in/
+[Oo]bj/
+.vs/
+
+# --- ASP.NET secrets (never commit tokens/credentials) ---
+appsettings.*.local.json
+secrets.json
+
+# --- Node / Nuxt (frontend, próximo paso) ---
+node_modules/
+.nuxt/
+.output/
+dist/
+.env
+.env.*
+!.env.example
+
+# --- OS / editores ---
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
