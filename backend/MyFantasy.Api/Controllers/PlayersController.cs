@@ -18,12 +18,14 @@ public class PlayersController : ControllerBase
     private readonly AppDbContext _db;
     private readonly LeagueService _leagues;
     private readonly DeltaService _deltas;
+    private readonly PlayerOverviewService _overview;
 
-    public PlayersController(AppDbContext db, LeagueService leagues, DeltaService deltas)
+    public PlayersController(AppDbContext db, LeagueService leagues, DeltaService deltas, PlayerOverviewService overview)
     {
         _db = db;
         _leagues = leagues;
         _deltas = deltas;
+        _overview = overview;
     }
 
     [HttpGet]
@@ -54,6 +56,68 @@ public class PlayersController : ControllerBase
         .OrderByDescending(r => r.CurrentValue ?? 0);
 
         return Ok(rows);
+    }
+
+    /// <summary>
+    /// Pestaña General: TODOS los jugadores de la competición (los tenga fichados
+    /// o no), con precio, deltas y tendencia. Filtra por equipo con
+    /// <paramref name="teamId"/>; si se filtra, añade el agregado del equipo.
+    /// No hace llamadas a la API: se nutre de Players + PriceSnapshots.
+    /// </summary>
+    [HttpGet("all")]
+    public async Task<ActionResult<PlayersOverviewResponse>> All([FromQuery] string? teamId, CancellationToken ct)
+    {
+        var query = _db.Players.AsQueryable();
+        if (!string.IsNullOrWhiteSpace(teamId))
+            query = query.Where(p => p.TeamId == teamId);
+
+        var players = await query.ToListAsync(ct);
+        var metrics = await _overview.GetMetricsBulkAsync(players.Select(p => p.Id).ToList(), ct);
+
+        var rows = players.Select(p =>
+        {
+            metrics.TryGetValue(p.Id, out var m);
+            return new PlayerRowResponse(
+                p.Id, p.ExternalId, p.Name, p.Team, p.TeamId, p.Position.ToSpanish(),
+                m?.CurrentValue, m?.DailyDelta, m?.WeeklyDelta, m?.Trend ?? "estable", p.ImageUrl);
+        })
+        .OrderByDescending(r => r.CurrentValue ?? 0)
+        .ToList();
+
+        var aggregate = string.IsNullOrWhiteSpace(teamId) || rows.Count == 0
+            ? null
+            : BuildTeamAggregate(teamId!, rows);
+
+        return Ok(new PlayersOverviewResponse(rows, aggregate));
+    }
+
+    private static TeamAggregateResponse BuildTeamAggregate(string teamId, List<PlayerRowResponse> rows)
+    {
+        var daily = rows.Where(r => r.DailyDelta.HasValue).Select(r => (double)r.DailyDelta!.Value).ToList();
+        var weekly = rows.Where(r => r.WeeklyDelta.HasValue).Select(r => (double)r.WeeklyDelta!.Value).ToList();
+
+        return new TeamAggregateResponse(
+            TeamId: teamId,
+            PlayerCount: rows.Count,
+            AvgDailyDelta: daily.Count == 0 ? 0 : (long)Math.Round(daily.Average()),
+            AvgWeeklyDelta: weekly.Count == 0 ? 0 : (long)Math.Round(weekly.Average()),
+            AvgDailyPct: AvgPct(rows, r => r.DailyDelta),
+            AvgWeeklyPct: AvgPct(rows, r => r.WeeklyDelta));
+    }
+
+    /// <summary>Media de la variación porcentual (delta relativo al precio de partida).</summary>
+    private static double AvgPct(List<PlayerRowResponse> rows, Func<PlayerRowResponse, long?> delta)
+    {
+        var pcts = new List<double>();
+        foreach (var r in rows)
+        {
+            var d = delta(r);
+            if (d is null || r.CurrentValue is null) continue;
+            var start = r.CurrentValue.Value - d.Value; // precio antes de la variación
+            if (start <= 0) continue;
+            pcts.Add((double)d.Value / start * 100.0);
+        }
+        return pcts.Count == 0 ? 0 : Math.Round(pcts.Average(), 2);
     }
 
     /// <summary>Editar manualmente el precio de compra (fallback si la API no lo trae).</summary>

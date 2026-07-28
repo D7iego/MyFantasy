@@ -69,5 +69,38 @@ public record MarketRowResponse(
     long? SalePrice,
     string? ImageUrl);
 
+/// <summary>Fila de la pestaña General: cualquier jugador de la competición con
+/// precio, deltas y tendencia (alcista/bajista/estable).</summary>
+public record PlayerRowResponse(
+    int PlayerId,
+    string ExternalId,
+    string Name,
+    string? Team,
+    string? TeamId,
+    string Position,
+    long? CurrentValue,
+    long? DailyDelta,
+    long? WeeklyDelta,
+    string Trend,
+    string? ImageUrl);
+
+/// <summary>Tendencia agregada de un equipo (media de sus jugadores).</summary>
+public record TeamAggregateResponse(
+    string TeamId,
+    int PlayerCount,
+    long AvgDailyDelta,
+    long AvgWeeklyDelta,
+    double AvgDailyPct,
+    double AvgWeeklyPct);
+
+/// <summary>Respuesta de <c>GET /api/players/all</c>: jugadores + (si se filtró
+/// por equipo) el agregado del equipo.</summary>
+public record PlayersOverviewResponse(
+    IReadOnlyList<PlayerRowResponse> Players,
+    TeamAggregateResponse? TeamAggregate);
+
+/// <summary>Equipo de LaLiga con su escudo, para el filtro visual de la pestaña General.</summary>
+public record TeamResponse(string Id, string Name, string? BadgeUrl);
+
 public record UpdatePurchasePriceRequest(long PurchasePrice);
 public record UpdateSalePriceRequest(long SalePrice);

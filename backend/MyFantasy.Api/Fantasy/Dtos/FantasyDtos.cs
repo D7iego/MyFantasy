@@ -16,6 +16,20 @@ public class TeamRefDto
     public string? ShortName { get; set; }
     public string? Slug { get; set; }
     public string? BadgeColor { get; set; }
+    public string? Badge { get; set; }
+    public string? Image { get; set; }
+
+    /// <summary>URL del escudo. Prioriza los campos de imagen; usa BadgeColor solo
+    /// si resulta ser una URL (a veces es un color hex, que se descarta).</summary>
+    public string? ResolvedBadgeUrl
+    {
+        get
+        {
+            foreach (var c in new[] { Badge, Image, BadgeColor })
+                if (!string.IsNullOrWhiteSpace(c) && c.StartsWith("http")) return c;
+            return null;
+        }
+    }
 }
 
 public class ManagerDto

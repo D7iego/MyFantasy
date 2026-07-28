@@ -16,6 +16,10 @@ public class Player
 
     public string? Team { get; set; }
 
+    /// <summary>ID del equipo real de LaLiga (de teams-master). Permite filtrar
+    /// y agregar por equipo en la pestaña General.</summary>
+    public string? TeamId { get; set; }
+
     public Position Position { get; set; } = Position.Unknown;
 
     /// <summary>Última URL de imagen conocida (opcional, para el frontend).</summary>

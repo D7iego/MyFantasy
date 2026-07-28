@@ -18,6 +18,7 @@ const tabs = [
   { to: '/', label: 'Ligas', icon: '🏆' },
   { to: '/jugadores', label: 'Jugadores', icon: '👥' },
   { to: '/mercado', label: 'Mercado', icon: '🛒' },
+  { to: '/general', label: 'General', icon: '📋' },
   { to: '/historial', label: 'Historial', icon: '🗂️' },
   { to: '/stats', label: 'Stats', icon: '📊' }
 ]
