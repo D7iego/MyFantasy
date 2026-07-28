@@ -1,6 +1,19 @@
 <script setup lang="ts">
 const { state, run } = useSync()
 
+// Al arrancar, comprueba si la sesión de LaLiga sigue viva; si no, abre el
+// re-login proactivamente (sin esperar al primer 401 de una vista).
+const { trigger } = useAuthGate()
+onMounted(async () => {
+  try {
+    const base = useRuntimeConfig().public.apiBase
+    const res = await $fetch<{ authenticated: boolean }>('/api/auth/status', { baseURL: base })
+    if (!res.authenticated) trigger()
+  } catch {
+    // Backend caído: las vistas ya muestran AppError.
+  }
+})
+
 const tabs = [
   { to: '/', label: 'Ligas', icon: '🏆' },
   { to: '/jugadores', label: 'Jugadores', icon: '👥' },
@@ -84,5 +97,7 @@ const syncSummary = computed(() => {
     <footer class="mx-auto w-full max-w-5xl px-4 py-6 text-center text-xs text-muted">
       MyFantasy · seguimiento personal de precios y trading
     </footer>
+
+    <LoginModal />
   </div>
 </template>

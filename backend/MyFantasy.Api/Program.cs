@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MyFantasy.Api.Data;
 using MyFantasy.Api.Fantasy;
+using MyFantasy.Api.Middleware;
 using MyFantasy.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,8 +22,14 @@ var serverVersion = new MySqlServerVersion(new Version(8, 0, 36));
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseMySql(connectionString, serverVersion));
 
+// ---- Cifrado en reposo del refresh_token (Data Protection) ----
+builder.Services.AddDataProtection();
+
 // ---- Cliente de la API de LaLiga (token + datos) ----
-builder.Services.AddHttpClient<IFantasyTokenManager, FantasyTokenManager>();
+// El token manager es singleton para cachear el bearer entre peticiones y
+// sobrevivir a la rotación del refresh; usa un HttpClient con nombre.
+builder.Services.AddHttpClient("laliga-auth");
+builder.Services.AddSingleton<IFantasyTokenManager, FantasyTokenManager>();
 builder.Services.AddHttpClient<IFantasyApiClient, FantasyApiClient>((sp, client) =>
 {
     var o = sp.GetRequiredService<IOptions<FantasyOptions>>().Value;
@@ -65,6 +72,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("frontend");
+app.UseMiddleware<NeedsLoginMiddleware>();
 app.MapControllers();
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok", timestamp = DateTime.UtcNow }));
