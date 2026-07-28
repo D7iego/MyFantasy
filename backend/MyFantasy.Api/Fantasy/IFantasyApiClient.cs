@@ -23,6 +23,9 @@ public interface IFantasyApiClient
 
     Task<TeamMoneyDto?> GetTeamMoneyAsync(string teamId, CancellationToken ct = default);
 
+    /// <summary>Jugadores en venta hoy en el mercado de una liga.</summary>
+    Task<IReadOnlyList<MarketItemDto>> GetMarketAsync(string leagueId, CancellationToken ct = default);
+
     /// <summary>Registro maestro de equipos (id → nombre/escudo). El feed de
     /// jugadores no trae el equipo embebido; se resuelve con esto.</summary>
     Task<IReadOnlyList<TeamRefDto>> GetTeamsMasterAsync(CancellationToken ct = default);

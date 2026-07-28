@@ -56,5 +56,18 @@ public record StatsResponse(
 /// <summary>Punto del gráfico de barras "movimiento diario" de la pestaña Stats.</summary>
 public record DailyPnlResponse(DateOnly Fecha, long Movimiento);
 
+/// <summary>Fila de la pestaña Mercado: jugador en venta hoy + deltas de precio.</summary>
+public record MarketRowResponse(
+    int? PlayerId,
+    string ExternalId,
+    string Name,
+    string? Team,
+    string Position,
+    long? CurrentValue,
+    long? DailyDelta,
+    long? WeeklyDelta,
+    long? SalePrice,
+    string? ImageUrl);
+
 public record UpdatePurchasePriceRequest(long PurchasePrice);
 public record UpdateSalePriceRequest(long SalePrice);
