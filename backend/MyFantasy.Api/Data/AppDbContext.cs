@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<PriceSnapshot> PriceSnapshots => Set<PriceSnapshot>();
     public DbSet<Holding> Holdings => Set<Holding>();
     public DbSet<Sale> Sales => Set<Sale>();
+    public DbSet<AuthState> AuthStates => Set<AuthState>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -57,6 +58,13 @@ public class AppDbContext : DbContext
             e.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.PlayerId);
             e.HasOne(x => x.League).WithMany(l => l.Sales).HasForeignKey(x => x.LeagueId);
             e.HasIndex(x => new { x.LeagueId, x.SaleDate });
+        });
+
+        b.Entity<AuthState>(e =>
+        {
+            // Fila única con Id fijo = 1 (no autoincremental).
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.RefreshTokenEnc).HasColumnType("longtext");
         });
     }
 }

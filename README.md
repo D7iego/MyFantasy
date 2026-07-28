@@ -78,6 +78,18 @@ dotnet user-secrets set "Fantasy:Auth:RefreshToken" "<refresh_token>"
 ```
 > Alternativa rápida para probar: `dotnet user-secrets set "Fantasy:Auth:BearerToken" "<id_token>"` (caduca en ~1 h, sin refresh).
 
+#### Re-login cuando el refresh_token caduca (cuentas Google)
+Con cuenta de **Google** no se puede automatizar el login (Azure B2C + Google no
+admiten usuario/contraseña por API). Por eso, cuando el `refresh_token` deja de
+ser válido, el backend responde `401 { needsLogin: true }` en cualquier endpoint
+que dependa de LaLiga y el **frontend abre un modal** para pegar un token nuevo:
+- `POST /api/auth/login` con `{ "refreshToken": "…" }` (recomendado) o
+  `{ "bearerToken": "<id_token>" }` (parche, caduca ~1 h).
+- El `refresh_token` se guarda **cifrado en BD** (tabla `AuthStates`, vía
+  ASP.NET Data Protection) y se reutiliza tras reinicios; la contraseña de Google
+  nunca se envía ni se almacena.
+- `GET /api/auth/status` → `{ authenticated: bool }` (la app lo consulta al arrancar).
+
 ### 5. Migraciones y arranque
 La migración `InitialCreate` ya está creada y se aplica **automáticamente** al
 arrancar (`Database:AutoMigrate`). Solo:
