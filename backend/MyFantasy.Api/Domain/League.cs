@@ -15,6 +15,10 @@ public class League
 
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>ID del equipo del usuario en esta liga (resuelto en el sync).
+    /// Se cachea para consultar el dinero disponible sin re-resolverlo cada vez.</summary>
+    public string? TeamId { get; set; }
+
     public bool IsDefault { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

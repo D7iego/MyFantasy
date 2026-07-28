@@ -3,7 +3,7 @@ defineProps<{
   label: string
   value: string
   sub?: string
-  tone?: 'default' | 'up' | 'down' | 'brand'
+  tone?: 'default' | 'up' | 'down' | 'brand' | 'gold'
 }>()
 </script>
 
@@ -16,7 +16,8 @@ defineProps<{
         'text-white': !tone || tone === 'default',
         'text-up': tone === 'up',
         'text-down': tone === 'down',
-        'text-brand': tone === 'brand'
+        'text-brand': tone === 'brand',
+        'text-gold': tone === 'gold'
       }"
     >
       {{ value }}
