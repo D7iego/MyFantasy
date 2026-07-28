@@ -11,6 +11,13 @@ interface Stats {
   activePortfolioValue: number
   activeUnrealizedProfitLoss: number
   activeHoldings: number
+  todayMovement: number
+  availableMoney: number | null
+}
+
+interface DailyPnl {
+  fecha: string
+  movimiento: number
 }
 
 const api = useApi()
@@ -22,6 +29,32 @@ const { data: stats, pending: pStats, error: eStats } = await useAsyncData('stat
 const { data: players } = await useAsyncData('stats-players', () =>
   api.get<Holding[]>('/api/players')
 )
+const { data: daily } = await useAsyncData('stats-daily', () =>
+  api.get<DailyPnl[]>('/api/stats/daily-pnl?days=7')
+)
+
+const UP = '#18C29C'
+const DOWN = '#FF3D4D'
+
+const shortDate = (iso: string) => {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+}
+
+// Movimiento diario de la plantilla (barras): verde si sube, rojo si baja.
+const dailySeries = computed(() => (daily.value || []).map((d) => d.movimiento))
+const hasDaily = computed(() => dailySeries.value.some((v) => v !== 0))
+const dailyOptions = computed(() => ({
+  chart: { type: 'bar', toolbar: { show: false }, foreColor: '#8B8F9C', fontFamily: 'Sora, sans-serif' },
+  plotOptions: { bar: { borderRadius: 4, columnWidth: '55%', distributed: true } },
+  colors: (daily.value || []).map((d) => (d.movimiento >= 0 ? UP : DOWN)),
+  dataLabels: { enabled: false },
+  legend: { show: false },
+  grid: { borderColor: 'rgba(255,255,255,0.06)' },
+  xaxis: { categories: (daily.value || []).map((d) => shortDate(d.fecha)) },
+  yaxis: { labels: { formatter: (v: number) => eur(v, { compact: true }) } },
+  tooltip: { y: { formatter: (v: number) => signed(v) } }
+}))
 
 // Composición de la cartera por posición (donut)
 const byPosition = computed(() => {
@@ -79,6 +112,40 @@ const barOptions = computed(() => ({
     <AppError v-else-if="eStats" />
 
     <template v-else-if="stats">
+      <!-- Destacado: dinero disponible + movimiento del día + gráfico 7 días -->
+      <div class="grid gap-3 lg:grid-cols-3">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+          <StatTile
+            label="Dinero disponible"
+            :value="eur(stats.availableMoney, { compact: true })"
+            tone="gold"
+            sub="saldo del equipo"
+          />
+          <StatTile
+            label="Movimiento de hoy"
+            :value="signed(stats.todayMovement)"
+            :tone="stats.todayMovement > 0 ? 'up' : stats.todayMovement < 0 ? 'down' : 'default'"
+            sub="valor de mercado hoy vs. ayer"
+          />
+        </div>
+
+        <div class="panel p-4 lg:col-span-2">
+          <div class="section-label mb-2">Movimiento diario · últimos 7 días</div>
+          <ClientOnly>
+            <apexchart
+              v-if="hasDaily"
+              type="bar"
+              height="240"
+              :options="dailyOptions"
+              :series="[{ name: 'Movimiento', data: dailySeries }]"
+            />
+            <p v-else class="py-12 text-center text-sm text-muted">
+              Aún no hay suficiente histórico de precios. Sincroniza varios días para ver la serie.
+            </p>
+          </ClientOnly>
+        </div>
+      </div>
+
       <!-- KPIs -->
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
@@ -94,10 +161,10 @@ const barOptions = computed(() => ({
           :sub="`${stats.activeHoldings} jugadores`"
         />
         <StatTile
-          label="G/P no realizada"
+          label="Plusvalía acumulada"
           :value="signed(stats.activeUnrealizedProfitLoss)"
           :tone="stats.activeUnrealizedProfitLoss > 0 ? 'up' : stats.activeUnrealizedProfitLoss < 0 ? 'down' : 'default'"
-          sub="cartera actual vs compra"
+          sub="cartera actual − precio de compra"
         />
         <StatTile
           label="% con beneficio"

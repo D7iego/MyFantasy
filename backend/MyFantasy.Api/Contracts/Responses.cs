@@ -47,7 +47,14 @@ public record StatsResponse(
     SaleResponse? WorstSale,
     long ActivePortfolioValue,
     long ActiveUnrealizedProfitLoss,
-    int ActiveHoldings);
+    int ActiveHoldings,
+    // Movimiento del valor de mercado de la plantilla hoy vs. ayer (NO plusvalía).
+    long TodayMovement,
+    // Dinero disponible en el equipo (de la API); null si no se pudo obtener.
+    long? AvailableMoney);
+
+/// <summary>Punto del gráfico de barras "movimiento diario" de la pestaña Stats.</summary>
+public record DailyPnlResponse(DateOnly Fecha, long Movimiento);
 
 public record UpdatePurchasePriceRequest(long PurchasePrice);
 public record UpdateSalePriceRequest(long SalePrice);

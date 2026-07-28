@@ -64,6 +64,9 @@ public class SyncService
                     Warning: "Precios guardados, pero no pude localizar tu equipo en la clasificación (¿token de otra cuenta?). Diff de plantilla omitido.");
             }
 
+            // Cachea el equipo del usuario para consultas posteriores (dinero disponible).
+            if (league.TeamId != teamId) league.TeamId = teamId;
+
             // 4) Plantilla actual + diff.
             var squad = await _api.GetTeamSquadAsync(league.ExternalId, teamId, ct);
             var (newHoldings, newSales) = await DiffSquadAsync(league, squad, playerByExt, today, ct);
