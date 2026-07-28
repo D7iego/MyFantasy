@@ -4,7 +4,10 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
   modules: ['@nuxtjs/tailwindcss'],
   css: ['~/assets/css/main.css'],
-  ssr: true,
+  // SPA estática: la app consume la API C# desde el cliente. Sin SSR evitamos
+  // que el build (o una función serverless) intente llamar al backend, así se
+  // despliega como estático en Netlify y se ve aunque el back no esté aún.
+  ssr: false,
   app: {
     head: {
       title: 'MyFantasy',

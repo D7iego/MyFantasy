@@ -1,0 +1,16 @@
+# Deploy del frontend Nuxt (SPA estática) en Netlify.
+# La "Base directory" en Netlify está puesta a `frontend`, así que estas rutas
+# son relativas a esa carpeta.
+[build]
+  command = "npm run generate"
+  publish = ".output/public"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Fallback SPA: cualquier ruta (/mercado, /general, recargar en una subpágina…)
+# sirve index.html y el router de Nuxt resuelve en cliente. Evita 404 al recargar.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
