@@ -54,6 +54,9 @@ public class FantasyApiClient : IFantasyApiClient
     public Task<TeamMoneyDto?> GetTeamMoneyAsync(string teamId, CancellationToken ct = default)
         => GetObjectAsync<TeamMoneyDto>(Route(_options.Endpoints.TeamMoney, teamId: teamId), ct);
 
+    public Task<IReadOnlyList<MarketItemDto>> GetMarketAsync(string leagueId, CancellationToken ct = default)
+        => GetListAsync<MarketItemDto>(Route(_options.Endpoints.Market, leagueId: leagueId), ct);
+
     public Task<IReadOnlyList<TeamRefDto>> GetTeamsMasterAsync(CancellationToken ct = default)
         => GetListAsync<TeamRefDto>(Route(_options.Endpoints.TeamsMaster), ct);
 

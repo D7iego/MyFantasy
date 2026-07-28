@@ -168,3 +168,36 @@ public class TeamMoneyDto
     public long? Amount { get; set; }
     public long Value => TeamMoney ?? Amount ?? 0;
 }
+
+/// <summary>
+/// Entrada del mercado de una liga (/league/{id}/market). La forma real varía;
+/// leemos el jugador embebido (<c>playerMaster</c>) o los campos planos, y
+/// normalizamos con las propiedades <c>Resolved*</c>. Los deltas NO salen de
+/// aquí: se calculan con nuestros PriceSnapshots casando por id externo.
+/// </summary>
+public class MarketItemDto
+{
+    public PlayerMasterDto? PlayerMaster { get; set; }
+
+    // Formas planas alternativas (algunos feeds no anidan playerMaster).
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? PlayerMasterId { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? Nickname { get; set; }
+    public int? PositionId { get; set; }
+    public long? MarketValue { get; set; }
+    public long? SalePrice { get; set; }
+    public TeamRefDto? Team { get; set; }
+    public string? Image { get; set; }
+    public PlayerImagesDto? Images { get; set; }
+
+    public string? ResolvedExternalId => PlayerMaster?.Id ?? PlayerMasterId ?? Id;
+    public string? ResolvedName => PlayerMaster?.Nickname ?? PlayerMaster?.Name
+        ?? (string.IsNullOrWhiteSpace(Nickname) ? Name : Nickname);
+    public int? ResolvedPositionId => PlayerMaster?.PositionId ?? PositionId;
+    public long? ResolvedMarketValue => PlayerMaster?.MarketValue ?? MarketValue ?? SalePrice;
+    public string? ResolvedTeamName => PlayerMaster?.Team?.Name ?? Team?.Name;
+    public string? ResolvedImageUrl => PlayerMaster?.ResolvedImageUrl ?? Image ?? Images?.Best;
+}
