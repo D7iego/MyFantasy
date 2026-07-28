@@ -144,10 +144,14 @@ public class SyncService
         }
     }
 
+    /// <summary>ID de equipo del jugador (del feed o extraído de la URL de foto /tNNN/).</summary>
+    private static string? ResolveTeamId(FantasyPlayerDto dto)
+        => dto.TeamId ?? dto.Team?.Id ?? ExtractTeamIdFromImage(dto.ResolvedImageUrl);
+
     /// <summary>Resuelve el nombre de equipo por id (del feed o extraído de la URL de foto /tNNN/).</summary>
     private static string? ResolveTeamName(FantasyPlayerDto dto, IReadOnlyDictionary<string, string> teamsMap)
     {
-        var teamId = dto.TeamId ?? dto.Team?.Id ?? ExtractTeamIdFromImage(dto.ResolvedImageUrl);
+        var teamId = ResolveTeamId(dto);
         return teamId != null && teamsMap.TryGetValue(teamId, out var name) ? name : null;
     }
 
@@ -174,6 +178,8 @@ public class SyncService
                 byExt[dto.Id!] = player;
             }
             player.Name = dto.DisplayName ?? player.Name;
+            var teamId = ResolveTeamId(dto);
+            if (!string.IsNullOrWhiteSpace(teamId)) player.TeamId = teamId;
             var resolvedTeam = dto.ResolvedTeamName ?? ResolveTeamName(dto, teamsMap);
             if (!string.IsNullOrWhiteSpace(resolvedTeam)) player.Team = resolvedTeam;
             player.Position = PositionExtensions.FromApiId(dto.PositionId);

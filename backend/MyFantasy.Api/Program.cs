@@ -40,6 +40,7 @@ builder.Services.AddHttpClient<IFantasyApiClient, FantasyApiClient>((sp, client)
 builder.Services.AddScoped<LeagueService>();
 builder.Services.AddScoped<DeltaService>();
 builder.Services.AddScoped<StatsService>();
+builder.Services.AddScoped<PlayerOverviewService>();
 builder.Services.AddScoped<SyncService>();
 
 // ---- Web ----
