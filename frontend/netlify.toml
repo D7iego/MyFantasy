@@ -7,6 +7,9 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # Netlify autodetecta Nuxt y mete NITRO_PRESET=netlify (modo servidor), lo que
+  # hace que `nuxt generate` NO produzca .output/public. Forzamos salida estática.
+  NITRO_PRESET = "static"
 
 # Fallback SPA: cualquier ruta (/mercado, /general, recargar en una subpágina…)
 # sirve index.html y el router de Nuxt resuelve en cliente. Evita 404 al recargar.
