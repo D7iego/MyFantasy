@@ -66,9 +66,12 @@ public class FantasyApiClient : IFantasyApiClient
     public Task<IReadOnlyList<ActivityEntryDto>> GetLeagueActivityAsync(string leagueId, int index, CancellationToken ct = default)
         => GetListAsync<ActivityEntryDto>(Route(_options.Endpoints.LeagueActivity, leagueId: leagueId, index: index.ToString()), ct);
 
+    public Task<IReadOnlyList<OfferDto>> GetPlayerOffersAsync(string leagueId, string playerTeamId, CancellationToken ct = default)
+        => GetListAsync<OfferDto>(Route(_options.Endpoints.PlayerOffer, leagueId: leagueId, playerTeamId: playerTeamId), ct);
+
     // ---- Infra ----
 
-    private string Route(string template, string? leagueId = null, string? teamId = null, string? weekNumber = null, string? playerId = null, string? index = null)
+    private string Route(string template, string? leagueId = null, string? teamId = null, string? weekNumber = null, string? playerId = null, string? index = null, string? playerTeamId = null)
     {
         var path = template
             .Replace("{competitionId}", _options.CompetitionId)
@@ -76,6 +79,7 @@ public class FantasyApiClient : IFantasyApiClient
             .Replace("{teamId}", teamId ?? string.Empty)
             .Replace("{weekNumber}", weekNumber ?? string.Empty)
             .Replace("{playerId}", playerId ?? string.Empty)
+            .Replace("{playerTeamId}", playerTeamId ?? string.Empty)
             .Replace("{index}", index ?? "0");
 
         var sep = path.Contains('?') ? '&' : '?';

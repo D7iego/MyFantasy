@@ -56,6 +56,27 @@ public record StatsResponse(
 /// <summary>Punto del gráfico de barras "movimiento diario" de la pestaña Stats.</summary>
 public record DailyPnlResponse(DateOnly Fecha, long Movimiento);
 
+/// <summary>Fila "En venta": jugador MÍO listado en el mercado, con la mejor
+/// oferta actual y su diferencia/% respecto al precio al que lo listé.</summary>
+public record ForSaleRowResponse(
+    int? PlayerId,
+    string ExternalId,
+    string Name,
+    string? Team,
+    string Position,
+    long? CurrentValue,
+    long SalePrice,
+    int NumberOfOffers,
+    long? BestOffer,
+    long? OfferDiff,
+    double? OfferPct,
+    string? ImageUrl);
+
+/// <summary>Respuesta de /api/market: mercado completo (sin mis jugadores) + mis ventas.</summary>
+public record MarketResponse(
+    IReadOnlyList<MarketRowResponse> Market,
+    IReadOnlyList<ForSaleRowResponse> ForSale);
+
 /// <summary>Fila de la pestaña Mercado: jugador en venta hoy + deltas de precio.</summary>
 public record MarketRowResponse(
     int? PlayerId,

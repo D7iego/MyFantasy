@@ -4,6 +4,7 @@ using MyFantasy.Api.Contracts;
 using MyFantasy.Api.Data;
 using MyFantasy.Api.Domain;
 using MyFantasy.Api.Fantasy;
+using MyFantasy.Api.Fantasy.Dtos;
 using MyFantasy.Api.Services;
 
 namespace MyFantasy.Api.Controllers;
@@ -32,57 +33,100 @@ public class MarketController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<MarketRowResponse>>> Get(CancellationToken ct)
+    public async Task<ActionResult<MarketResponse>> Get(CancellationToken ct)
     {
         var league = await _leagues.GetDefaultLeagueAsync(ct);
-        if (league is null) return Ok(Array.Empty<MarketRowResponse>());
+        if (league is null)
+            return Ok(new MarketResponse(Array.Empty<MarketRowResponse>(), Array.Empty<ForSaleRowResponse>()));
 
+        // 1) Mis jugadores listados (de mi plantilla), para el bloque "En venta"
+        //    y para excluirlos del mercado general.
+        var myListed = new List<SquadPlayerDto>();
+        if (!string.IsNullOrWhiteSpace(league.TeamId))
+        {
+            var squad = await _api.GetTeamSquadAsync(league.ExternalId, league.TeamId!, ct);
+            myListed = (squad?.Players ?? new())
+                .Where(p => p.PlayerMarket?.SalePrice != null && !string.IsNullOrWhiteSpace(p.PlayerMaster?.Id))
+                .ToList();
+        }
+        var myExtIds = myListed.Select(p => p.PlayerMaster!.Id!).ToHashSet();
+
+        // 2) Mercado general (sin mis jugadores), una entrada por jugador.
         var items = await _api.GetMarketAsync(league.ExternalId, ct);
-
-        // Una entrada por jugador (por si el feed repite).
         var byExt = items
-            .Where(i => !string.IsNullOrWhiteSpace(i.ResolvedExternalId))
+            .Where(i => !string.IsNullOrWhiteSpace(i.ResolvedExternalId) && !myExtIds.Contains(i.ResolvedExternalId!))
             .GroupBy(i => i.ResolvedExternalId!)
             .ToDictionary(g => g.Key, g => g.First());
 
-        // Jugadores internos para resolver PlayerId + datos consistentes con el resto de la app.
-        var extIds = byExt.Keys.ToList();
-        var players = await _db.Players
-            .Where(p => extIds.Contains(p.ExternalId))
-            .ToListAsync(ct);
+        // 3) Jugadores internos + deltas para todo (mercado + mis ventas).
+        var allExtIds = byExt.Keys.Concat(myExtIds).Distinct().ToList();
+        var players = await _db.Players.Where(p => allExtIds.Contains(p.ExternalId)).ToListAsync(ct);
         var playerByExt = players.ToDictionary(p => p.ExternalId);
-
         var deltas = await _deltas.GetDeltasBulkAsync(players.Select(p => p.Id).ToList(), ct);
 
-        var rows = byExt.Values.Select(item =>
+        PriceDeltas? DeltaFor(Player? p)
+        {
+            if (p is null) return null;
+            deltas.TryGetValue(p.Id, out var d);
+            return d;
+        }
+
+        var market = byExt.Values.Select(item =>
         {
             var ext = item.ResolvedExternalId!;
             playerByExt.TryGetValue(ext, out var player);
-
-            PriceDeltas? d = null;
-            if (player is not null) deltas.TryGetValue(player.Id, out d);
-
-            var name = player?.Name ?? item.ResolvedName ?? ext;
-            var team = player?.Team ?? item.ResolvedTeamName;
-            var position = (player?.Position ?? PositionExtensions.FromApiId(item.ResolvedPositionId)).ToSpanish();
-            var current = d?.CurrentValue ?? item.ResolvedMarketValue;
-            var image = player?.ImageUrl ?? item.ResolvedImageUrl;
-
+            var d = DeltaFor(player);
             return new MarketRowResponse(
-                PlayerId: player?.Id,
-                ExternalId: ext,
-                Name: name,
-                Team: team,
-                Position: position,
-                CurrentValue: current,
-                DailyDelta: d?.DailyDelta,
-                WeeklyDelta: d?.WeeklyDelta,
-                SalePrice: item.SalePrice,
-                ImageUrl: image);
+                player?.Id, ext,
+                player?.Name ?? item.ResolvedName ?? ext,
+                player?.Team ?? item.ResolvedTeamName,
+                (player?.Position ?? PositionExtensions.FromApiId(item.ResolvedPositionId)).ToSpanish(),
+                d?.CurrentValue ?? item.ResolvedMarketValue,
+                d?.DailyDelta, d?.WeeklyDelta, item.SalePrice,
+                player?.ImageUrl ?? item.ResolvedImageUrl);
         })
         .OrderByDescending(r => r.DailyDelta ?? long.MinValue)
         .ToList();
 
-        return Ok(rows);
+        // 4) "En venta": mis listados con la mejor oferta actual y su %.
+        var forSale = new List<ForSaleRowResponse>();
+        foreach (var sp in myListed)
+        {
+            var ext = sp.PlayerMaster!.Id!;
+            playerByExt.TryGetValue(ext, out var player);
+            var d = DeltaFor(player);
+            var salePrice = sp.PlayerMarket!.SalePrice!.Value;
+
+            long? bestOffer = null;
+            if (!string.IsNullOrWhiteSpace(sp.PlayerTeamId))
+            {
+                try
+                {
+                    var offers = await _api.GetPlayerOffersAsync(league.ExternalId, sp.PlayerTeamId!, ct);
+                    bestOffer = offers
+                        .Where(o => o.Money is not null && (o.Status is null || o.Status.Equals("pending", StringComparison.OrdinalIgnoreCase)))
+                        .Select(o => o.Money!.Value)
+                        .DefaultIfEmpty()
+                        .Max();
+                    if (bestOffer == 0) bestOffer = null;
+                }
+                catch { /* degradar: sin oferta */ }
+            }
+
+            long? diff = bestOffer is null ? null : bestOffer - salePrice;
+            double? pct = bestOffer is null || salePrice <= 0 ? null : Math.Round((double)(bestOffer.Value - salePrice) / salePrice * 100, 1);
+
+            forSale.Add(new ForSaleRowResponse(
+                player?.Id, ext,
+                player?.Name ?? sp.PlayerMaster.Nickname ?? sp.PlayerMaster.Name ?? ext,
+                player?.Team ?? sp.PlayerMaster.Team?.Name,
+                (player?.Position ?? PositionExtensions.FromApiId(sp.PlayerMaster.PositionId ?? sp.PositionId)).ToSpanish(),
+                d?.CurrentValue, salePrice, sp.PlayerMarket.NumberOfOffers ?? 0,
+                bestOffer, diff, pct,
+                player?.ImageUrl ?? sp.PlayerMaster.ResolvedImageUrl));
+        }
+        forSale = forSale.OrderByDescending(r => r.OfferPct ?? double.MinValue).ToList();
+
+        return Ok(new MarketResponse(market, forSale));
     }
 }

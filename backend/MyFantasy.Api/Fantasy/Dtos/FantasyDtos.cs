@@ -107,6 +107,11 @@ public class SquadPlayerDto
     public ManagerDto? Manager { get; set; }
     [JsonConverter(typeof(NumberOrStringConverter))]
     public string? ManagerId { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? PlayerTeamId { get; set; }
+
+    /// <summary>Presente si el jugador está listado en el mercado por su dueño.</summary>
+    public PlayerMarketDto? PlayerMarket { get; set; }
 
     // Candidatos a "precio de compra" (sin confirmar cuál trae la API real).
     public long? PurchasePrice { get; set; }
@@ -185,6 +190,21 @@ public class TeamMoneyDto
     public long? TeamMoney { get; set; }
     public long? Amount { get; set; }
     public long Value => TeamMoney ?? Amount ?? 0;
+}
+
+/// <summary>Estado de venta de un jugador listado por su dueño (playerMarket).</summary>
+public class PlayerMarketDto
+{
+    public long? SalePrice { get; set; }
+    public int? NumberOfOffers { get; set; }
+    public string? ExpirationDate { get; set; }
+}
+
+/// <summary>Oferta recibida por un jugador en venta (/playerTeam/{id}/offer).</summary>
+public class OfferDto
+{
+    public long? Money { get; set; }
+    public string? Status { get; set; }
 }
 
 /// <summary>Entrada del feed de actividad de la liga. Para un fichaje
