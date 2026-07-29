@@ -20,6 +20,7 @@ export const useApi = () => {
     base,
     get: <T>(path: string) => request<T>(path, { method: 'GET' }),
     post: <T>(path: string, body?: any) => request<T>(path, { method: 'POST', body }),
-    put: <T>(path: string, body?: any) => request<T>(path, { method: 'PUT', body })
+    put: <T>(path: string, body?: any) => request<T>(path, { method: 'PUT', body }),
+    delete: <T>(path: string) => request<T>(path, { method: 'DELETE' })
   }
 }

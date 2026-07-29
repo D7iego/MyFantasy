@@ -15,6 +15,7 @@ export interface MarketRow {
 const props = defineProps<{ rows: MarketRow[] }>()
 
 const { eur } = useFormat()
+const { open } = usePlayerModal()
 
 const posColor = (p: string) =>
   ({
@@ -68,10 +69,14 @@ const sortedRows = computed(() => {
           <tr v-for="r in sortedRows" :key="r.externalId" class="hover:bg-ink-900/[0.02]">
             <!-- Jugador -->
             <td class="px-4 py-3">
-              <div class="flex items-center gap-3">
+              <div
+                class="flex items-center gap-3"
+                :class="r.playerId ? 'cursor-pointer' : ''"
+                @click="r.playerId && open(r.playerId)"
+              >
                 <span class="pill shrink-0" :class="posColor(r.position)">{{ posShort(r.position) }}</span>
                 <div class="min-w-0">
-                  <div class="truncate font-semibold text-ink-900">{{ r.name }}</div>
+                  <div class="truncate font-semibold text-ink-900" :class="r.playerId ? 'hover:underline' : ''">{{ r.name }}</div>
                   <div class="truncate text-xs text-ink-600">{{ r.team || '—' }}</div>
                 </div>
                 <div class="ml-auto shrink-0">

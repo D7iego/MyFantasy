@@ -60,15 +60,23 @@ public class FantasyApiClient : IFantasyApiClient
     public Task<IReadOnlyList<TeamRefDto>> GetTeamsMasterAsync(CancellationToken ct = default)
         => GetListAsync<TeamRefDto>(Route(_options.Endpoints.TeamsMaster), ct);
 
+    public Task<PlayerDetailApiDto?> GetPlayerDetailAsync(string playerId, string leagueId, CancellationToken ct = default)
+        => GetObjectAsync<PlayerDetailApiDto>(Route(_options.Endpoints.PlayerDetail, leagueId: leagueId, playerId: playerId), ct);
+
+    public Task<IReadOnlyList<ActivityEntryDto>> GetLeagueActivityAsync(string leagueId, int index, CancellationToken ct = default)
+        => GetListAsync<ActivityEntryDto>(Route(_options.Endpoints.LeagueActivity, leagueId: leagueId, index: index.ToString()), ct);
+
     // ---- Infra ----
 
-    private string Route(string template, string? leagueId = null, string? teamId = null, string? weekNumber = null)
+    private string Route(string template, string? leagueId = null, string? teamId = null, string? weekNumber = null, string? playerId = null, string? index = null)
     {
         var path = template
             .Replace("{competitionId}", _options.CompetitionId)
             .Replace("{leagueId}", leagueId ?? string.Empty)
             .Replace("{teamId}", teamId ?? string.Empty)
-            .Replace("{weekNumber}", weekNumber ?? string.Empty);
+            .Replace("{weekNumber}", weekNumber ?? string.Empty)
+            .Replace("{playerId}", playerId ?? string.Empty)
+            .Replace("{index}", index ?? "0");
 
         var sep = path.Contains('?') ? '&' : '?';
         return $"{_options.BaseUrl.TrimEnd('/')}{path}{sep}x-lang={_options.Language}";

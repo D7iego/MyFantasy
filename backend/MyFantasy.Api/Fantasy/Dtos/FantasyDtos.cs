@@ -117,6 +117,10 @@ public class SquadPlayerDto
     public long? MarketValue { get; set; }
     public int? PositionId { get; set; }
 
+    /// <summary>Fin del blindaje / bloqueo de cláusula (ISO 8601), confirmado en el
+    /// detalle de jugador: <c>playerTeam.buyoutClauseLockedEndTime</c>.</summary>
+    public string? BuyoutClauseLockedEndTime { get; set; }
+
     /// <summary>Primer precio de compra disponible de la API, o null si no viene.</summary>
     public long? ResolvedPurchasePrice => PurchasePrice ?? BuyPrice;
 }
@@ -181,6 +185,73 @@ public class TeamMoneyDto
     public long? TeamMoney { get; set; }
     public long? Amount { get; set; }
     public long Value => TeamMoney ?? Amount ?? 0;
+}
+
+/// <summary>Entrada del feed de actividad de la liga. Para un fichaje
+/// (activityTypeId de compra), <c>amount</c> es el importe REAL pagado y
+/// <c>user1Id</c> el manager comprador.</summary>
+public class ActivityEntryDto
+{
+    public int? ActivityTypeId { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? User1Id { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? PlayerMasterId { get; set; }
+    public long? Amount { get; set; }
+    public string? CreatedAt { get; set; }
+}
+
+// ---- Detalle de jugador (/player/{id}/league/{leagueId}) ----
+
+public class PlayerDetailApiDto
+{
+    public PlayerMasterDetailDto? PlayerMaster { get; set; }
+    public PlayerTeamDetailDto? PlayerTeam { get; set; }
+}
+
+public class PlayerMasterDetailDto
+{
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? Nickname { get; set; }
+    public int? PositionId { get; set; }
+    public long? MarketValue { get; set; }
+    public TeamRefDto? Team { get; set; }
+    public string? Image { get; set; }
+    public PlayerImagesDto? Images { get; set; }
+    public double? Points { get; set; }
+    public double? AveragePoints { get; set; }
+    public List<PlayerStatDto>? PlayerStats { get; set; }
+
+    public string? ResolvedImageUrl => Image ?? Images?.Best;
+}
+
+public class PlayerTeamDetailDto
+{
+    public long? BuyoutClause { get; set; }
+    public string? BuyoutClauseLockedEndTime { get; set; }
+    public bool? IsShielded { get; set; }
+}
+
+/// <summary>Stat de una jornada. Forma exacta SIN confirmar (array vacío en
+/// pretemporada); campos permisivos con los nombres más probables.</summary>
+public class PlayerStatDto
+{
+    public int? WeekNumber { get; set; }
+    public int? Week { get; set; }
+    public double? TotalPoints { get; set; }
+    public double? Points { get; set; }
+    public int? Goals { get; set; }
+    public int? GoalScored { get; set; }
+    public int? Assists { get; set; }
+    public int? Minutes { get; set; }
+    public int? MinutesPlayed { get; set; }
+
+    public int? ResolvedWeek => WeekNumber ?? Week;
+    public double? ResolvedPoints => TotalPoints ?? Points;
+    public int? ResolvedGoals => Goals ?? GoalScored;
+    public int? ResolvedMinutes => Minutes ?? MinutesPlayed;
 }
 
 /// <summary>

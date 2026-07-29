@@ -29,4 +29,12 @@ public interface IFantasyApiClient
     /// <summary>Registro maestro de equipos (id → nombre/escudo). El feed de
     /// jugadores no trae el equipo embebido; se resuelve con esto.</summary>
     Task<IReadOnlyList<TeamRefDto>> GetTeamsMasterAsync(CancellationToken ct = default);
+
+    /// <summary>Detalle de un jugador en una liga: puntos, media, cláusula y
+    /// <c>playerStats</c> por jornada (vacío en pretemporada).</summary>
+    Task<PlayerDetailApiDto?> GetPlayerDetailAsync(string playerId, string leagueId, CancellationToken ct = default);
+
+    /// <summary>Feed de actividad de la liga (página <paramref name="index"/>): fichajes
+    /// y ventas con su importe. Fuente del precio de compra REAL.</summary>
+    Task<IReadOnlyList<ActivityEntryDto>> GetLeagueActivityAsync(string leagueId, int index, CancellationToken ct = default);
 }

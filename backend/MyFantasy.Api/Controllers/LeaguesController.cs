@@ -39,4 +39,29 @@ public class LeaguesController : ControllerBase
         var ok = await _leagues.SetDefaultAsync(id, ct);
         return ok ? NoContent() : NotFound(new { error = "Liga no encontrada" });
     }
+
+    /// <summary>
+    /// Borra una liga (p. ej. una liga fantasma tras salirte de ella) y, en
+    /// cascada, sus Holdings y Sales. NO toca PriceSnapshots (son por jugador,
+    /// comunes a toda la competición). Si era la predeterminada, la regla de
+    /// liga por defecto recae automáticamente en la siguiente disponible.
+    /// </summary>
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
+    {
+        var league = await _db.Leagues.FindAsync([id], ct);
+        if (league is null) return NotFound(new { error = "Liga no encontrada" });
+
+        _db.Leagues.Remove(league);
+        await _db.SaveChangesAsync(ct);
+
+        // Si la borrada tenía la marca y quedan ligas, marca la más antigua para
+        // que haya siempre una resaltada en la UI.
+        if (league.IsDefault)
+        {
+            var next = await _leagues.GetDefaultLeagueAsync(ct);
+            if (next is not null) await _leagues.SetDefaultAsync(next.Id, ct);
+        }
+        return NoContent();
+    }
 }
