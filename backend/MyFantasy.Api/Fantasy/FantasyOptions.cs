@@ -87,6 +87,7 @@ public class FantasyEndpoints
     public string TeamSquad { get; set; } = "/v1/competition/{competitionId}/leagues/{leagueId}/teams/{teamId}";
     public string TeamMoney { get; set; } = "/v1/competition/{competitionId}/teams/{teamId}/money";
     public string Market { get; set; } = "/v1/competition/{competitionId}/league/{leagueId}/market";
+    public string PlayerOffer { get; set; } = "/v1/competition/{competitionId}/league/{leagueId}/playerTeam/{playerTeamId}/offer";
     public string Players { get; set; } = "/v1/competition/{competitionId}/players";
     public string PlayerDetail { get; set; } = "/v1/competition/{competitionId}/player/{playerId}/league/{leagueId}";
     public string TeamsMaster { get; set; } = "/v3/teams-master";

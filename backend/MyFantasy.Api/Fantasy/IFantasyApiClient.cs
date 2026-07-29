@@ -37,4 +37,7 @@ public interface IFantasyApiClient
     /// <summary>Feed de actividad de la liga (página <paramref name="index"/>): fichajes
     /// y ventas con su importe. Fuente del precio de compra REAL.</summary>
     Task<IReadOnlyList<ActivityEntryDto>> GetLeagueActivityAsync(string leagueId, int index, CancellationToken ct = default);
+
+    /// <summary>Ofertas recibidas por un jugador en venta (por playerTeamId).</summary>
+    Task<IReadOnlyList<OfferDto>> GetPlayerOffersAsync(string leagueId, string playerTeamId, CancellationToken ct = default);
 }
