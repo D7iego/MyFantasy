@@ -21,6 +21,14 @@ public class FantasyOptions
 
     public int TimeoutSeconds { get; set; } = 20;
 
+    /// <summary>activityTypeIds que representan una adquisición en el feed de
+    /// actividad (de ahí sale el precio REAL pagado): 33 = compra de mercado,
+    /// 31 = pago de cláusula. Confirmados sobre datos reales.</summary>
+    public int[] PurchaseActivityTypeIds { get; set; } = { 33, 31 };
+
+    /// <summary>Páginas del feed de actividad a recorrer al enriquecer precios de compra.</summary>
+    public int ActivityPagesToScan { get; set; } = 15;
+
     public FantasyAuthOptions Auth { get; set; } = new();
 
     public FantasyEndpoints Endpoints { get; set; } = new();
@@ -75,9 +83,11 @@ public class FantasyEndpoints
     public string CurrentUser { get; set; } = "/v4/user/me";
     public string Leagues { get; set; } = "/v1/competition/{competitionId}/leagues";
     public string LeagueStanding { get; set; } = "/v1/competition/{competitionId}/leagues/{leagueId}/standing";
+    public string LeagueActivity { get; set; } = "/v1/competition/{competitionId}/leagues/{leagueId}/activity/{index}";
     public string TeamSquad { get; set; } = "/v1/competition/{competitionId}/leagues/{leagueId}/teams/{teamId}";
     public string TeamMoney { get; set; } = "/v1/competition/{competitionId}/teams/{teamId}/money";
     public string Market { get; set; } = "/v1/competition/{competitionId}/league/{leagueId}/market";
     public string Players { get; set; } = "/v1/competition/{competitionId}/players";
+    public string PlayerDetail { get; set; } = "/v1/competition/{competitionId}/player/{playerId}/league/{leagueId}";
     public string TeamsMaster { get; set; } = "/v3/teams-master";
 }

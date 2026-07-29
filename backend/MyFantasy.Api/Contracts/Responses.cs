@@ -102,5 +102,56 @@ public record PlayersOverviewResponse(
 /// <summary>Equipo de LaLiga con su escudo, para el filtro visual de la pestaña General.</summary>
 public record TeamResponse(string Id, string Name, string? BadgeUrl);
 
+// ---- Pestaña Rivales (plantillas de otros managers) ----
+
+/// <summary>Manager de la liga (para el selector de la pestaña Rivales).</summary>
+public record RivalManagerResponse(string TeamId, string ManagerName, string? TeamName);
+
+/// <summary>Jugador en la plantilla de un rival: valor, deltas y estado de cláusula.</summary>
+public record RivalPlayerResponse(
+    int? PlayerId,
+    string ExternalId,
+    string Name,
+    string? Team,
+    string Position,
+    long? CurrentValue,
+    long? DailyDelta,
+    long? WeeklyDelta,
+    long? BuyoutClause,
+    string? BuyoutClauseLockedEndTime,
+    bool IsShielded,
+    string? ImageUrl);
+
+public record RivalsResponse(
+    IReadOnlyList<RivalManagerResponse> Managers,
+    string? SelectedTeamId,
+    IReadOnlyList<RivalPlayerResponse>? Squad);
+
+// ---- Modal de detalle de jugador ----
+
+/// <summary>Un día del histórico de precios + su variación respecto al día anterior.</summary>
+public record PriceHistoryPointResponse(DateOnly Date, long Value, long? Delta);
+
+/// <summary>Rendimiento en una jornada (de playerStats de la API). Campos opcionales
+/// porque en pretemporada el array llega vacío y la forma exacta se confirmará en liga.</summary>
+public record MatchStatResponse(int? Week, double? Points, int? Goals, int? Assists, int? Minutes);
+
+public record PlayerDetailResponse(
+    string ExternalId,
+    string Name,
+    string? Team,
+    string Position,
+    string? ImageUrl,
+    long? CurrentValue,
+    long? DailyDelta,
+    long? BuyoutClause,
+    string? BuyoutClauseLockedEndTime,
+    bool IsShielded,
+    double? Points,
+    double? AveragePoints,
+    IReadOnlyList<PriceHistoryPointResponse> PriceHistory,
+    IReadOnlyList<MatchStatResponse> Matches,
+    bool SportsAvailable);
+
 public record UpdatePurchasePriceRequest(long PurchasePrice);
 public record UpdateSalePriceRequest(long SalePrice);

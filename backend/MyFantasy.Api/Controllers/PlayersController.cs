@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using MyFantasy.Api.Contracts;
 using MyFantasy.Api.Data;
 using MyFantasy.Api.Domain;
+using MyFantasy.Api.Fantasy;
+using MyFantasy.Api.Fantasy.Dtos;
 using MyFantasy.Api.Services;
 
 namespace MyFantasy.Api.Controllers;
@@ -19,13 +21,18 @@ public class PlayersController : ControllerBase
     private readonly LeagueService _leagues;
     private readonly DeltaService _deltas;
     private readonly PlayerOverviewService _overview;
+    private readonly IFantasyApiClient _api;
+    private readonly ILogger<PlayersController> _logger;
 
-    public PlayersController(AppDbContext db, LeagueService leagues, DeltaService deltas, PlayerOverviewService overview)
+    public PlayersController(AppDbContext db, LeagueService leagues, DeltaService deltas,
+        PlayerOverviewService overview, IFantasyApiClient api, ILogger<PlayersController> logger)
     {
         _db = db;
         _leagues = leagues;
         _deltas = deltas;
         _overview = overview;
+        _api = api;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -120,6 +127,76 @@ public class PlayersController : ControllerBase
         return pcts.Count == 0 ? 0 : Math.Round(pcts.Average(), 2);
     }
 
+    /// <summary>
+    /// Detalle de un jugador para el modal: histórico de precios (local, seguro)
+    /// + parte deportiva (API, degradando con gracia si falla o está vacía).
+    /// </summary>
+    [HttpGet("{id:int}/detail")]
+    public async Task<ActionResult<PlayerDetailResponse>> Detail(int id, CancellationToken ct)
+    {
+        var player = await _db.Players.FindAsync([id], ct);
+        if (player is null) return NotFound(new { error = "Jugador no encontrado" });
+
+        // Histórico de precios (desc: el más reciente primero) con delta día a día.
+        var snaps = await _db.PriceSnapshots
+            .Where(s => s.PlayerId == id)
+            .OrderByDescending(s => s.Date)
+            .Take(120)
+            .Select(s => new { s.Date, s.MarketValue })
+            .ToListAsync(ct);
+
+        var history = new List<PriceHistoryPointResponse>(snaps.Count);
+        for (var i = 0; i < snaps.Count; i++)
+        {
+            long? delta = i + 1 < snaps.Count ? snaps[i].MarketValue - snaps[i + 1].MarketValue : null;
+            history.Add(new PriceHistoryPointResponse(snaps[i].Date, snaps[i].MarketValue, delta));
+        }
+
+        long? currentValue = snaps.Count > 0 ? snaps[0].MarketValue : null;
+        long? todayDelta = history.Count > 0 ? history[0].Delta : null;
+
+        // Parte deportiva: requiere liga; si algo falla, se degrada.
+        PlayerDetailApiDto? detail = null;
+        var league = await _leagues.GetDefaultLeagueAsync(ct);
+        if (league is not null)
+        {
+            try
+            {
+                detail = await _api.GetPlayerDetailAsync(player.ExternalId, league.ExternalId, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Detalle deportivo no disponible para {ExternalId}.", player.ExternalId);
+            }
+        }
+
+        var stats = detail?.PlayerMaster?.PlayerStats ?? new();
+        var matches = stats
+            .Select(s => new MatchStatResponse(s.ResolvedWeek, s.ResolvedPoints, s.ResolvedGoals, s.Assists, s.ResolvedMinutes))
+            .Where(m => m.Week is not null || m.Points is not null)
+            .OrderByDescending(m => m.Week ?? 0)
+            .ToList();
+
+        var pt = detail?.PlayerTeam;
+
+        return Ok(new PlayerDetailResponse(
+            ExternalId: player.ExternalId,
+            Name: player.Name,
+            Team: player.Team ?? detail?.PlayerMaster?.Team?.Name,
+            Position: player.Position.ToSpanish(),
+            ImageUrl: player.ImageUrl ?? detail?.PlayerMaster?.ResolvedImageUrl,
+            CurrentValue: currentValue ?? detail?.PlayerMaster?.MarketValue,
+            DailyDelta: todayDelta,
+            BuyoutClause: pt?.BuyoutClause,
+            BuyoutClauseLockedEndTime: pt?.BuyoutClauseLockedEndTime,
+            IsShielded: pt?.IsShielded ?? false,
+            Points: detail?.PlayerMaster?.Points,
+            AveragePoints: detail?.PlayerMaster?.AveragePoints,
+            PriceHistory: history,
+            Matches: matches,
+            SportsAvailable: matches.Count > 0));
+    }
+
     /// <summary>Editar manualmente el precio de compra (fallback si la API no lo trae).</summary>
     [HttpPut("holdings/{id:int}/purchase-price")]
     public async Task<IActionResult> UpdatePurchasePrice(int id, [FromBody] UpdatePurchasePriceRequest body, CancellationToken ct)
@@ -129,7 +206,8 @@ public class PlayersController : ControllerBase
         if (body.PurchasePrice < 0) return BadRequest(new { error = "El precio de compra no puede ser negativo" });
 
         holding.PurchasePrice = body.PurchasePrice;
-        holding.PurchasePriceIsManual = true;
+        // Confirmado por el usuario: no volver a estimarlo ni pisarlo en el sync.
+        holding.PurchasePriceIsManual = false;
         await _db.SaveChangesAsync(ct);
         return NoContent();
     }

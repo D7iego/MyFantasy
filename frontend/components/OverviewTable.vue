@@ -16,6 +16,7 @@ export interface PlayerRow {
 const props = defineProps<{ rows: PlayerRow[] }>()
 
 const { eur } = useFormat()
+const { open } = usePlayerModal()
 
 const posColor = (p: string) =>
   ({
@@ -75,10 +76,10 @@ const sortedRows = computed(() => {
         <tbody class="divide-y divide-ink-900/5">
           <tr v-for="r in sortedRows" :key="r.externalId" class="hover:bg-ink-900/[0.02]">
             <td class="px-4 py-3">
-              <div class="flex items-center gap-3">
+              <div class="flex cursor-pointer items-center gap-3" @click="open(r.playerId)">
                 <span class="pill shrink-0" :class="posColor(r.position)">{{ posShort(r.position) }}</span>
                 <div class="min-w-0">
-                  <div class="truncate font-semibold text-ink-900">{{ r.name }}</div>
+                  <div class="truncate font-semibold text-ink-900 hover:underline">{{ r.name }}</div>
                   <div class="truncate text-xs text-ink-600">{{ r.team || '—' }}</div>
                 </div>
                 <div class="ml-auto shrink-0">

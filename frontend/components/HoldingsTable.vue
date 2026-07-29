@@ -22,6 +22,7 @@ const emit = defineEmits<{ (e: 'saved'): void }>()
 
 const api = useApi()
 const { eur, deltaClass, signed } = useFormat()
+const { open } = usePlayerModal()
 
 const posColor = (p: string) =>
   ({
@@ -101,10 +102,10 @@ const saveEdit = async (h: Holding) => {
           <tr v-for="h in sortedRows" :key="h.holdingId" class="hover:bg-ink-900/[0.02]">
             <!-- Jugador -->
             <td class="px-4 py-3">
-              <div class="flex items-center gap-3">
+              <div class="flex cursor-pointer items-center gap-3" @click="open(h.playerId)">
                 <span class="pill shrink-0" :class="posColor(h.position)">{{ posShort(h.position) }}</span>
                 <div class="min-w-0">
-                  <div class="truncate font-semibold text-ink-900">{{ h.name }}</div>
+                  <div class="truncate font-semibold text-ink-900 hover:underline">{{ h.name }}</div>
                   <div class="truncate text-xs text-ink-600">{{ h.team || '—' }}</div>
                 </div>
                 <!-- Foto del jugador, a la derecha en el espacio libre -->

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MyFantasy.Api.Data;
 using MyFantasy.Api.Domain;
 using MyFantasy.Api.Fantasy;
@@ -26,12 +27,14 @@ public class SyncService
     private readonly AppDbContext _db;
     private readonly IFantasyApiClient _api;
     private readonly ILogger<SyncService> _logger;
+    private readonly FantasyOptions _options;
 
-    public SyncService(AppDbContext db, IFantasyApiClient api, ILogger<SyncService> logger)
+    public SyncService(AppDbContext db, IFantasyApiClient api, ILogger<SyncService> logger, IOptions<FantasyOptions> options)
     {
         _db = db;
         _api = api;
         _logger = logger;
+        _options = options.Value;
     }
 
     public async Task<SyncResult> SyncAsync(CancellationToken ct = default)
@@ -71,6 +74,17 @@ public class SyncService
             var squad = await _api.GetTeamSquadAsync(league.ExternalId, teamId, ct);
             var (newHoldings, newSales) = await DiffSquadAsync(league, squad, playerByExt, today, ct);
 
+            await _db.SaveChangesAsync(ct);
+
+            // 5) Precio de compra REAL desde el feed de actividad (la plantilla no
+            //    lo trae). Corrige los holdings aún estimados (no editados a mano).
+            var me = await _api.GetCurrentUserAsync(ct);
+            var myManagerId = squad?.Players?.FirstOrDefault()?.Manager?.Id
+                ?? squad?.Players?.FirstOrDefault()?.ManagerId
+                ?? squad?.Manager?.Id
+                ?? me?.ManagerId ?? me?.AnyId;
+            _logger.LogDebug("Enrich precios de compra: managerId={Id}", myManagerId);
+            await EnrichPurchasePricesFromActivityAsync(league, myManagerId, ct);
             await _db.SaveChangesAsync(ct);
 
             var active = await _db.Holdings.CountAsync(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active, ct);
@@ -122,6 +136,65 @@ public class SyncService
     {
         var flagged = await _db.Leagues.FirstOrDefaultAsync(l => l.IsDefault, ct);
         return flagged ?? await _db.Leagues.OrderBy(l => l.CreatedAt).ThenBy(l => l.Id).FirstOrDefaultAsync(ct);
+    }
+
+    /// <summary>
+    /// Rellena el precio de compra REAL de los holdings aún estimados (no
+    /// editados a mano) leyendo el feed de actividad de la liga, donde cada
+    /// fichaje trae el importe pagado. Casa por playerMasterId + manager.
+    /// </summary>
+    private async Task<int> EnrichPurchasePricesFromActivityAsync(League league, string? myManagerId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(myManagerId)) return 0;
+
+        // Solo los estimados (PurchasePriceIsManual==true): respetamos ediciones manuales.
+        var holdings = await _db.Holdings
+            .Include(h => h.Player)
+            .Where(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active && h.PurchasePriceIsManual && h.Player != null)
+            .ToListAsync(ct);
+        if (holdings.Count == 0) return 0;
+
+        var need = holdings
+            .GroupBy(h => h.Player!.ExternalId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var found = new Dictionary<string, long>();
+        try
+        {
+            for (var i = 0; i < _options.ActivityPagesToScan && found.Count < need.Count; i++)
+            {
+                var page = await _api.GetLeagueActivityAsync(league.ExternalId, i, ct);
+                if (page.Count == 0) break;
+
+                foreach (var e in page)
+                {
+                    if (e.ActivityTypeId is null || !_options.PurchaseActivityTypeIds.Contains(e.ActivityTypeId.Value)) continue;
+                    if (e.User1Id != myManagerId) continue;
+                    if (string.IsNullOrWhiteSpace(e.PlayerMasterId) || e.Amount is null) continue;
+                    if (!need.ContainsKey(e.PlayerMasterId!)) continue;
+                    // El feed viene descendente: la primera coincidencia es la más reciente.
+                    found.TryAdd(e.PlayerMasterId!, e.Amount.Value);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "No se pudo enriquecer precios de compra desde la actividad.");
+            return 0;
+        }
+
+        var updated = 0;
+        foreach (var (ext, holding) in need)
+        {
+            if (found.TryGetValue(ext, out var amount))
+            {
+                holding.PurchasePrice = amount;
+                holding.PurchasePriceIsManual = false; // confirmado desde la API
+                updated++;
+            }
+        }
+        if (updated > 0) _logger.LogInformation("Precios de compra reales aplicados a {N} jugadores.", updated);
+        return updated;
     }
 
     private async Task<Dictionary<string, string>> LoadTeamsMapAsync(CancellationToken ct)

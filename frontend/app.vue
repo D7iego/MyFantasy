@@ -19,6 +19,7 @@ const tabs = [
   { to: '/jugadores', label: 'Jugadores', icon: '👥' },
   { to: '/mercado', label: 'Mercado', icon: '🛒' },
   { to: '/general', label: 'General', icon: '📋' },
+  { to: '/rivales', label: 'Rivales', icon: '⚔️' },
   { to: '/historial', label: 'Historial', icon: '🗂️' },
   { to: '/stats', label: 'Stats', icon: '📊' }
 ]
@@ -101,5 +102,6 @@ const syncSummary = computed(() => {
     </footer>
 
     <LoginModal />
+    <PlayerDetailModal />
   </div>
 </template>
