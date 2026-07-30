@@ -282,6 +282,14 @@ public class PlayerStatDto
 /// </summary>
 public class MarketItemDto
 {
+    /// <summary>Tipo de entrada: <c>marketPlayerLeague</c> (lo vende la liga /
+    /// agente libre) o <c>marketPlayerTeam</c> (lo vende un manager/rival).</summary>
+    public string? Discr { get; set; }
+
+    /// <summary>true si lo vende un equipo (rival o yo), no la liga.</summary>
+    public bool IsRivalSale => !string.IsNullOrEmpty(Discr) &&
+        Discr.Contains("Team", StringComparison.OrdinalIgnoreCase);
+
     public PlayerMasterDto? PlayerMaster { get; set; }
 
     // Formas planas alternativas (algunos feeds no anidan playerMaster).
