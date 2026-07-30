@@ -69,6 +69,9 @@ public class FantasyApiClient : IFantasyApiClient
     public Task<IReadOnlyList<OfferDto>> GetPlayerOffersAsync(string leagueId, string playerTeamId, CancellationToken ct = default)
         => GetListAsync<OfferDto>(Route(_options.Endpoints.PlayerOffer, leagueId: leagueId, playerTeamId: playerTeamId), ct);
 
+    public Task<LineupApiDto?> GetCurrentLineupAsync(string teamId, CancellationToken ct = default)
+        => GetObjectAsync<LineupApiDto>(Route(_options.Endpoints.TeamLineup, teamId: teamId), ct);
+
     // ---- Infra ----
 
     private string Route(string template, string? leagueId = null, string? teamId = null, string? weekNumber = null, string? playerId = null, string? index = null, string? playerTeamId = null)

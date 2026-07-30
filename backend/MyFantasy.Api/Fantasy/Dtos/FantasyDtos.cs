@@ -207,6 +207,27 @@ public class OfferDto
     public string? Status { get; set; }
 }
 
+// ---- Once oficial (/teams/{teamId}/lineup) ----
+
+public class LineupApiDto
+{
+    public FormationDto? Formation { get; set; }
+}
+
+public class FormationDto
+{
+    public List<LineupSlotDto>? Goalkeeper { get; set; }
+    public List<LineupSlotDto>? Defender { get; set; }
+    public List<LineupSlotDto>? Midfield { get; set; }
+    public List<LineupSlotDto>? Striker { get; set; }
+    public int[]? TacticalFormation { get; set; }
+}
+
+public class LineupSlotDto
+{
+    public PlayerMasterDto? PlayerMaster { get; set; }
+}
+
 /// <summary>Entrada del feed de actividad de la liga. Para un fichaje
 /// (activityTypeId de compra), <c>amount</c> es el importe REAL pagado y
 /// <c>user1Id</c> el manager comprador.</summary>

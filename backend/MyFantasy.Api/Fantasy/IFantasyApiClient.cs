@@ -40,4 +40,7 @@ public interface IFantasyApiClient
 
     /// <summary>Ofertas recibidas por un jugador en venta (por playerTeamId).</summary>
     Task<IReadOnlyList<OfferDto>> GetPlayerOffersAsync(string leagueId, string playerTeamId, CancellationToken ct = default);
+
+    /// <summary>Alineación oficial actual del equipo del usuario (para partir de ella).</summary>
+    Task<LineupApiDto?> GetCurrentLineupAsync(string teamId, CancellationToken ct = default);
 }
