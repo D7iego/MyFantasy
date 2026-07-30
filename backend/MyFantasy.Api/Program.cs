@@ -37,10 +37,12 @@ builder.Services.AddHttpClient<IFantasyApiClient, FantasyApiClient>((sp, client)
 });
 
 // ---- Servicios de dominio ----
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<LeagueService>();
 builder.Services.AddScoped<DeltaService>();
 builder.Services.AddScoped<StatsService>();
 builder.Services.AddScoped<PlayerOverviewService>();
+builder.Services.AddScoped<BidSuggestionService>();
 builder.Services.AddScoped<SyncService>();
 
 // ---- Web ----

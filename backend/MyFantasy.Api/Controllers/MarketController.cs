@@ -23,13 +23,16 @@ public class MarketController : ControllerBase
     private readonly LeagueService _leagues;
     private readonly DeltaService _deltas;
     private readonly IFantasyApiClient _api;
+    private readonly BidSuggestionService _bids;
 
-    public MarketController(AppDbContext db, LeagueService leagues, DeltaService deltas, IFantasyApiClient api)
+    public MarketController(AppDbContext db, LeagueService leagues, DeltaService deltas,
+        IFantasyApiClient api, BidSuggestionService bids)
     {
         _db = db;
         _leagues = leagues;
         _deltas = deltas;
         _api = api;
+        _bids = bids;
     }
 
     [HttpGet]
@@ -91,6 +94,13 @@ public class MarketController : ControllerBase
         })
         .OrderByDescending(r => r.DailyDelta ?? long.MinValue)
         .ToList();
+
+        // 3b) Puja sugerida (heurística) para todo el mercado a la vez.
+        var bids = await _bids.BuildAsync(
+            market.Select(m => new MarketMember(m.ExternalId, m.CurrentValue, m.WeeklyDelta)).ToList(), ct);
+        market = market
+            .Select(m => bids.TryGetValue(m.ExternalId, out var b) ? m with { Bid = b } : m)
+            .ToList();
 
         // 4) "En venta": mis listados con la mejor oferta actual y su %.
         var forSale = new List<ForSaleRowResponse>();

@@ -20,8 +20,10 @@ interface PlayerDetail {
 }
 
 const api = useApi()
-const { openPlayerId, close } = usePlayerModal()
+const { openPlayerId, openBid, close } = usePlayerModal()
 const { eur, signed, deltaClass, date } = useFormat()
+
+const pct = (v: number) => `${Math.round(v * 100)}%`
 
 const detail = ref<PlayerDetail | null>(null)
 const pending = ref(false)
@@ -117,6 +119,52 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               <div class="section-label">Cláusula</div>
               <div class="text-lg font-bold tabular-nums">{{ eur(detail.buyoutClause, { compact: true }) }}</div>
               <div v-if="clauseStatus" class="mt-0.5 text-[10px]" :class="clauseStatus.locked ? 'text-gold' : 'text-up'">{{ clauseStatus.text }}</div>
+            </div>
+          </div>
+
+          <!-- Puja sugerida (solo si se abrió desde Mercado) -->
+          <div v-if="openBid" class="border-t border-white/5 px-5 py-4">
+            <div class="section-label mb-2 flex items-center justify-between">
+              <span>Puja sugerida</span>
+              <span class="normal-case tracking-normal text-muted">estimación</span>
+            </div>
+
+            <div class="rounded-xl bg-gradient-to-b from-brand/15 to-brand/5 p-4">
+              <div class="flex items-end justify-between gap-3">
+                <div>
+                  <div class="text-2xl font-extrabold tabular-nums text-white">{{ eur(openBid.suggestedBid) }}</div>
+                  <div class="mt-0.5 text-[11px] text-muted">sobre el precio actual de {{ eur(detail.currentValue) }}</div>
+                </div>
+                <div class="text-right text-xs">
+                  <div class="text-muted">Media últ. 5</div>
+                  <div class="font-bold tabular-nums">{{ openBid.avgPointsLast5 != null ? openBid.avgPointsLast5.toFixed(1) + ' pts' : '—' }}</div>
+                  <div class="mt-1 text-muted">Precio semana</div>
+                  <div class="font-bold tabular-nums" :class="deltaClass(openBid.weeklyPct)">
+                    {{ openBid.weeklyPct != null ? (openBid.weeklyPct > 0 ? '+' : '') + openBid.weeklyPct + '%' : '—' }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Desglose de scores -->
+              <div class="mt-3 space-y-1.5">
+                <div v-for="s in [
+                  { l: 'Rendimiento', v: openBid.performanceScore },
+                  { l: 'Tendencia precio', v: openBid.priceTrendScore },
+                  { l: 'Combinado', v: openBid.combinedScore }
+                ]" :key="s.l" class="flex items-center gap-2">
+                  <span class="w-28 shrink-0 text-[11px] text-muted">{{ s.l }}</span>
+                  <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                    <div class="h-full rounded-full bg-brand" :style="{ width: s.v != null ? pct(s.v) : '0%' }" />
+                  </div>
+                  <span class="w-10 text-right text-[11px] tabular-nums text-white/80">{{ s.v != null ? pct(s.v) : '—' }}</span>
+                </div>
+              </div>
+
+              <p class="mt-3 text-[11px] leading-snug text-muted">
+                Estimación orientativa basada en rendimiento reciente y tendencia de precio frente al resto
+                del mercado de hoy. No es una predicción garantizada.
+                <span v-if="openBid.limitedData" class="text-gold">Datos limitados (faltan jornadas).</span>
+              </p>
             </div>
           </div>
 

@@ -88,7 +88,22 @@ public record MarketRowResponse(
     long? DailyDelta,
     long? WeeklyDelta,
     long? SalePrice,
-    string? ImageUrl);
+    string? ImageUrl,
+    BidSuggestionResponse? Bid = null);
+
+/// <summary>
+/// Puja sugerida (heurística propia, NO dato de la API): recomendación
+/// orientativa que combina rendimiento reciente y tendencia de precio. Se
+/// devuelve el desglose además del resultado para poder explicarlo en la UI.
+/// </summary>
+public record BidSuggestionResponse(
+    double? AvgPointsLast5,      // media de puntos en las últimas jornadas disputadas
+    double? WeeklyPct,           // variación de precio semanal (%)
+    double? PerformanceScore,    // 0..1, comparativo con el mercado de hoy (null si no hay datos)
+    double PriceTrendScore,      // 0..1, solo con su propio delta semanal
+    double CombinedScore,        // 0..1, 50/50
+    long SuggestedBid,           // precio_actual ajustado ±BidMaxAdjust según el score
+    bool LimitedData);           // true si faltan jornadas o no hay componente de rendimiento
 
 /// <summary>Fila de la pestaña General: cualquier jugador de la competición con
 /// precio, deltas y tendencia (alcista/bajista/estable).</summary>

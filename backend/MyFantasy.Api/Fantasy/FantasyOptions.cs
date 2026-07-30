@@ -14,6 +14,10 @@ public class FantasyOptions
     // /api/... sin quitarlo, confirmado en index.js + api.js).
     public string BaseUrl { get; set; } = "https://fantasy-api.llt-services.com/api";
 
+    /// <summary>Host de las rutas de estadísticas por jornada (/stats/v1/...), que
+    /// NO cuelgan de /api. SIN confirmar: ajústalo en appsettings si difiere.</summary>
+    public string StatsBaseUrl { get; set; } = "https://fantasy-api.llt-services.com";
+
     /// <summary>Temporada 26/27: las rutas ganaron segmento de competición (1 = LaLiga).</summary>
     public string CompetitionId { get; set; } = "1";
 
@@ -28,6 +32,17 @@ public class FantasyOptions
 
     /// <summary>Páginas del feed de actividad a recorrer al enriquecer precios de compra.</summary>
     public int ActivityPagesToScan { get; set; } = 15;
+
+    // ---- Heurística de "puja sugerida" (pestaña Mercado). Constantes fáciles de tocar. ----
+
+    /// <summary>Jornadas recientes a promediar para el rendimiento.</summary>
+    public int BidRecentWeeks { get; set; } = 5;
+
+    /// <summary>Rango de referencia (±%) del delta semanal para el price_trend_score.</summary>
+    public double BidPriceTrendRangePct { get; set; } = 10.0;
+
+    /// <summary>Ajuste máximo (±) sobre el precio actual según el score combinado.</summary>
+    public double BidMaxAdjust { get; set; } = 0.15;
 
     public FantasyAuthOptions Auth { get; set; } = new();
 
@@ -92,4 +107,8 @@ public class FantasyEndpoints
     public string Players { get; set; } = "/v1/competition/{competitionId}/players";
     public string PlayerDetail { get; set; } = "/v1/competition/{competitionId}/player/{playerId}/league/{leagueId}";
     public string TeamsMaster { get; set; } = "/v3/teams-master";
+
+    // Rutas de stats por jornada (bajo StatsBaseUrl, no BaseUrl). SIN confirmar.
+    public string CurrentWeek { get; set; } = "/stats/v1/competition/{competitionId}/stats/week/current";
+    public string WeekStats { get; set; } = "/stats/v1/competition/{competitionId}/stats/week/{weekNumber}";
 }

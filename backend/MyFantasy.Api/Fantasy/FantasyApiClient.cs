@@ -72,7 +72,23 @@ public class FantasyApiClient : IFantasyApiClient
     public Task<LineupApiDto?> GetCurrentLineupAsync(string teamId, CancellationToken ct = default)
         => GetObjectAsync<LineupApiDto>(Route(_options.Endpoints.TeamLineup, teamId: teamId), ct);
 
+    public Task<CurrentWeekDto?> GetCurrentWeekAsync(CancellationToken ct = default)
+        => GetObjectAsync<CurrentWeekDto>(StatsRoute(_options.Endpoints.CurrentWeek), ct);
+
+    public Task<IReadOnlyList<WeekStatDto>> GetWeekStatsAsync(int week, CancellationToken ct = default)
+        => GetListAsync<WeekStatDto>(StatsRoute(_options.Endpoints.WeekStats, weekNumber: week.ToString()), ct);
+
     // ---- Infra ----
+
+    /// <summary>Como <see cref="Route"/> pero con el host de stats (StatsBaseUrl).</summary>
+    private string StatsRoute(string template, string? weekNumber = null)
+    {
+        var path = template
+            .Replace("{competitionId}", _options.CompetitionId)
+            .Replace("{weekNumber}", weekNumber ?? string.Empty);
+        var sep = path.Contains('?') ? '&' : '?';
+        return $"{_options.StatsBaseUrl.TrimEnd('/')}{path}{sep}x-lang={_options.Language}";
+    }
 
     private string Route(string template, string? leagueId = null, string? teamId = null, string? weekNumber = null, string? playerId = null, string? index = null, string? playerTeamId = null)
     {
