@@ -17,6 +17,7 @@ onMounted(async () => {
 const tabs = [
   { to: '/', label: 'Ligas', icon: '🏆' },
   { to: '/jugadores', label: 'Jugadores', icon: '👥' },
+  { to: '/plantilla', label: 'Alineación', icon: '⚽' },
   { to: '/mercado', label: 'Mercado', icon: '🛒' },
   { to: '/general', label: 'General', icon: '📋' },
   { to: '/rivales', label: 'Rivales', icon: '⚔️' },

@@ -174,5 +174,18 @@ public record PlayerDetailResponse(
     IReadOnlyList<MatchStatResponse> Matches,
     bool SportsAvailable);
 
+// ---- Pestaña Plantilla/Alineación ----
+
+public record LineupResponse(int Id, string Name, string Formation, string Data, DateTime UpdatedAt);
+public record SaveLineupRequest(string? Name, string Formation, string Data);
+
+/// <summary>Once oficial actual mapeado por líneas (externalIds), para partir de él.</summary>
+public record OfficialLineupResponse(
+    string Formation,
+    IReadOnlyList<string> Goalkeepers,
+    IReadOnlyList<string> Defenders,
+    IReadOnlyList<string> Midfielders,
+    IReadOnlyList<string> Strikers);
+
 public record UpdatePurchasePriceRequest(long PurchasePrice);
 public record UpdateSalePriceRequest(long SalePrice);

@@ -13,10 +13,20 @@ public class AppDbContext : DbContext
     public DbSet<Holding> Holdings => Set<Holding>();
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<AuthState> AuthStates => Set<AuthState>();
+    public DbSet<Lineup> Lineups => Set<Lineup>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+
+        b.Entity<Lineup>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(80);
+            e.Property(x => x.Formation).HasMaxLength(20);
+            e.Property(x => x.Data).HasColumnType("longtext");
+            e.HasOne(x => x.League).WithMany().HasForeignKey(x => x.LeagueId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.LeagueId);
+        });
 
         b.Entity<League>(e =>
         {
