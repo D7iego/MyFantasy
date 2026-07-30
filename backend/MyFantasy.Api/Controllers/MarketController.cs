@@ -51,10 +51,14 @@ public class MarketController : ControllerBase
         }
         var myExtIds = myListed.Select(p => p.PlayerMaster!.Id!).ToHashSet();
 
-        // 2) Mercado general (sin mis jugadores), una entrada por jugador.
+        // 2) Mercado general: SOLO lo que vende la liga (agentes libres,
+        //    marketPlayerLeague). Se excluyen los listados por managers/rivales
+        //    (marketPlayerTeam) y, por tanto, también mis propios listados.
         var items = await _api.GetMarketAsync(league.ExternalId, ct);
         var byExt = items
-            .Where(i => !string.IsNullOrWhiteSpace(i.ResolvedExternalId) && !myExtIds.Contains(i.ResolvedExternalId!))
+            .Where(i => !i.IsRivalSale
+                        && !string.IsNullOrWhiteSpace(i.ResolvedExternalId)
+                        && !myExtIds.Contains(i.ResolvedExternalId!))
             .GroupBy(i => i.ResolvedExternalId!)
             .ToDictionary(g => g.Key, g => g.First());
 
