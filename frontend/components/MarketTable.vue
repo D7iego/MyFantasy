@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { BidSuggestion } from '~/composables/usePlayerModal'
+
 export interface MarketRow {
   playerId: number | null
   externalId: string
@@ -10,6 +12,7 @@ export interface MarketRow {
   weeklyDelta: number | null
   salePrice: number | null
   imageUrl: string | null
+  bid: BidSuggestion | null
 }
 
 const props = defineProps<{ rows: MarketRow[] }>()
@@ -39,14 +42,15 @@ const setSort = (key: string) => {
     sortDir.value = key === 'name' ? 'asc' : 'desc'
   }
 }
+const sortVal = (row: any, k: string) => (k === 'bid' ? row.bid?.suggestedBid ?? null : row[k])
 const sortedRows = computed(() => {
   const arr = [...props.rows]
   const k = sortKey.value
   const mul = sortDir.value === 'asc' ? 1 : -1
   return arr.sort((a: any, b: any) => {
     if (k === 'name') return String(a.name).localeCompare(String(b.name)) * mul
-    const av = a[k] ?? Number.NEGATIVE_INFINITY
-    const bv = b[k] ?? Number.NEGATIVE_INFINITY
+    const av = sortVal(a, k) ?? Number.NEGATIVE_INFINITY
+    const bv = sortVal(b, k) ?? Number.NEGATIVE_INFINITY
     return (av - bv) * mul
   })
 })
@@ -55,7 +59,7 @@ const sortedRows = computed(() => {
 <template>
   <div class="card overflow-hidden">
     <div class="overflow-x-auto">
-      <table class="w-full min-w-[720px] text-sm">
+      <table class="w-full min-w-[820px] text-sm">
         <thead>
           <tr class="border-b border-ink-900/10">
             <SortTh col-key="name" :active="sortKey" :dir="sortDir" @sort="setSort">Jugador</SortTh>
@@ -63,6 +67,7 @@ const sortedRows = computed(() => {
             <SortTh col-key="dailyDelta" align="right" :active="sortKey" :dir="sortDir" @sort="setSort">Día</SortTh>
             <SortTh col-key="weeklyDelta" align="right" :active="sortKey" :dir="sortDir" @sort="setSort">Semana</SortTh>
             <SortTh col-key="salePrice" align="right" :active="sortKey" :dir="sortDir" @sort="setSort">En venta</SortTh>
+            <SortTh col-key="bid" align="right" :active="sortKey" :dir="sortDir" @sort="setSort">Puja sug.</SortTh>
           </tr>
         </thead>
         <tbody class="divide-y divide-ink-900/5">
@@ -72,7 +77,7 @@ const sortedRows = computed(() => {
               <div
                 class="flex items-center gap-3"
                 :class="r.playerId ? 'cursor-pointer' : ''"
-                @click="r.playerId && open(r.playerId)"
+                @click="r.playerId && open(r.playerId, r.bid)"
               >
                 <span class="pill shrink-0" :class="posColor(r.position)">{{ posShort(r.position) }}</span>
                 <div class="min-w-0">
@@ -110,9 +115,21 @@ const sortedRows = computed(() => {
             <td class="px-4 py-3 text-right tabular-nums text-ink-900">
               {{ r.salePrice ? eur(r.salePrice) : '—' }}
             </td>
+
+            <!-- Puja sugerida (estimación orientativa, estilo secundario) -->
+            <td class="px-4 py-3 text-right">
+              <span v-if="r.bid" class="tabular-nums text-brand/90" :title="r.bid.limitedData ? 'Datos limitados' : 'Estimación orientativa'">
+                ~{{ eur(r.bid.suggestedBid, { compact: true }) }}<span v-if="r.bid.limitedData" class="text-muted">*</span>
+              </span>
+              <span v-else class="text-ink-600">—</span>
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
+    <p class="border-t border-ink-900/10 px-4 py-2 text-[11px] text-ink-600">
+      «Puja sug.» es una estimación orientativa (rendimiento reciente + tendencia de precio frente al
+      mercado de hoy), no una garantía. Pincha un jugador para ver el desglose.<span class="ml-1">* datos limitados.</span>
+    </p>
   </div>
 </template>

@@ -295,6 +295,35 @@ public class PlayerStatDto
     public int? ResolvedMinutes => Minutes ?? MinutesPlayed;
 }
 
+// ---- Stats por jornada (/stats/v1/.../stats/week/{n}) ----
+
+/// <summary>Jornada actual. Forma SIN confirmar; campos permisivos.</summary>
+public class CurrentWeekDto
+{
+    public int? WeekNumber { get; set; }
+    public int? Week { get; set; }
+    public int? Number { get; set; }
+
+    public int? ResolvedWeek => WeekNumber ?? Week ?? Number;
+}
+
+/// <summary>Stat de un jugador en una jornada (puntos Fantasy). Forma SIN
+/// confirmar; se leen los nombres más probables y se casa por id externo.</summary>
+public class WeekStatDto
+{
+    public PlayerMasterDto? PlayerMaster { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? PlayerMasterId { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? Id { get; set; }
+    public double? Points { get; set; }
+    public double? WeekPoints { get; set; }
+    public double? TotalPoints { get; set; }
+
+    public string? ResolvedPlayerId => PlayerMaster?.Id ?? PlayerMasterId ?? Id;
+    public double? ResolvedPoints => Points ?? WeekPoints ?? TotalPoints;
+}
+
 /// <summary>
 /// Entrada del mercado de una liga (/league/{id}/market). La forma real varía;
 /// leemos el jugador embebido (<c>playerMaster</c>) o los campos planos, y

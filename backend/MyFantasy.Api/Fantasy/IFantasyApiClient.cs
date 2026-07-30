@@ -43,4 +43,10 @@ public interface IFantasyApiClient
 
     /// <summary>Alineación oficial actual del equipo del usuario (para partir de ella).</summary>
     Task<LineupApiDto?> GetCurrentLineupAsync(string teamId, CancellationToken ct = default);
+
+    /// <summary>Jornada actual de la competición (para calcular "las últimas N").</summary>
+    Task<CurrentWeekDto?> GetCurrentWeekAsync(CancellationToken ct = default);
+
+    /// <summary>Estadísticas (puntos Fantasy) de todos los jugadores en una jornada.</summary>
+    Task<IReadOnlyList<WeekStatDto>> GetWeekStatsAsync(int week, CancellationToken ct = default);
 }
