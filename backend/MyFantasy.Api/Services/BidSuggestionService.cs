@@ -5,8 +5,10 @@ using MyFantasy.Api.Fantasy;
 
 namespace MyFantasy.Api.Services;
 
-/// <summary>Jugador del mercado de hoy que entra en el cálculo de la puja.</summary>
-public record MarketMember(string ExternalId, long? CurrentValue, long? WeeklyDelta);
+/// <summary>Jugador del mercado de hoy que entra en el cálculo de la puja.
+/// <paramref name="RecentTrendPct"/> es la variación reciente de precio (%),
+/// robusta a poco histórico (ver DeltaService).</summary>
+public record MarketMember(string ExternalId, long? CurrentValue, double? RecentTrendPct);
 
 /// <summary>
 /// Heurística de "puja sugerida" (pestaña Mercado). NO es un dato de la API: es
@@ -71,13 +73,9 @@ public class BidSuggestionService
         {
             if (m.CurrentValue is not long price || price <= 0) continue;
 
-            // price_trend_score: solo con su propio delta semanal %.
-            double? weeklyPct = null;
-            if (m.WeeklyDelta is long wd)
-            {
-                var start = price - wd;                 // precio de hace una semana
-                if (start > 0) weeklyPct = (double)wd / start * 100.0;
-            }
+            // price_trend_score: variación reciente de precio (%), robusta a poco
+            // histórico. Sin dato => neutro (0.5).
+            double? weeklyPct = m.RecentTrendPct;
             var trendScore = weeklyPct is double p
                 ? Math.Clamp((p + range) / (2 * range), 0, 1)
                 : 0.5;

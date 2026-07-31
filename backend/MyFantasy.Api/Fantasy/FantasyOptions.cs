@@ -38,8 +38,9 @@ public class FantasyOptions
     /// <summary>Jornadas recientes a promediar para el rendimiento.</summary>
     public int BidRecentWeeks { get; set; } = 5;
 
-    /// <summary>Rango de referencia (±%) del delta semanal para el price_trend_score.</summary>
-    public double BidPriceTrendRangePct { get; set; } = 10.0;
+    /// <summary>Rango de referencia (±%) de la tendencia reciente de precio para el
+    /// price_trend_score. Más pequeño = subidas/bajadas moderadas pesan más.</summary>
+    public double BidPriceTrendRangePct { get; set; } = 6.0;
 
     /// <summary>Máximo % POR DEBAJO del valor para un jugador flojo/en caída.</summary>
     public double BidMaxDrop { get; set; } = 0.10;

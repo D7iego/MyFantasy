@@ -3,7 +3,8 @@ using MyFantasy.Api.Data;
 
 namespace MyFantasy.Api.Services;
 
-public record PriceDeltas(long? CurrentValue, long? DailyDelta, long? WeeklyDelta, DateOnly? AsOf);
+public record PriceDeltas(long? CurrentValue, long? DailyDelta, long? WeeklyDelta, DateOnly? AsOf,
+    double? RecentTrendPct = null);
 
 /// <summary>
 /// Calcula variaciones de precio diarias/semanales a partir de los snapshots.
@@ -65,16 +66,26 @@ public class DeltaService
 
         // Semanal: primer snapshot con fecha <= último - 7 días.
         var weekTarget = latest.Date.AddDays(-7);
-        long? weekly = null;
+        long? weekBaseline = null;
         foreach (var s in snapshotsDesc)
         {
             if (s.Date <= weekTarget)
             {
-                weekly = latest.Value - s.Value;
+                weekBaseline = s.Value;
                 break;
             }
         }
+        long? weekly = weekBaseline is long wb ? latest.Value - wb : null;
 
-        return new PriceDeltas(latest.Value, daily, weekly, latest.Date);
+        // Tendencia reciente (%): usa el baseline de ~7 días; si no hay tanto
+        // histórico, el snapshot MÁS ANTIGUO disponible, para que una subida de
+        // pocos días también cuente (el semanal absoluto quedaría null).
+        long? trendBaseline = weekBaseline
+            ?? (snapshotsDesc.Count > 1 ? snapshotsDesc[snapshotsDesc.Count - 1].Value : (long?)null);
+        double? recentTrendPct = trendBaseline is long tb && tb > 0
+            ? (double)(latest.Value - tb) / tb * 100.0
+            : null;
+
+        return new PriceDeltas(latest.Value, daily, weekly, latest.Date, recentTrendPct);
     }
 }
