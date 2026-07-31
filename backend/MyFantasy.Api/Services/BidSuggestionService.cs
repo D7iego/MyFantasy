@@ -45,7 +45,6 @@ public class BidSuggestionService
         if (market.Count == 0) return result;
 
         var avg = await GetRecentAvgPointsAsync(ct);   // extId -> (media, jornadas)
-        var hasAnyPoints = avg.Count > 0;
 
         // min/max de media SOLO entre los jugadores del mercado que tienen datos.
         double min = 0, max = 0;
@@ -56,6 +55,10 @@ public class BidSuggestionService
             if (!haveRange) { min = max = a.Avg; haveRange = true; }
             else { if (a.Avg < min) min = a.Avg; if (a.Avg > max) max = a.Avg; }
         }
+
+        // Solo hay señal de rendimiento útil si hay partidos Y las medias difieren.
+        // En pretemporada (sin partidos) o si todos empatan, la puja es SOLO económica.
+        var haveSpread = haveRange && max > min;
 
         var range = _options.BidPriceTrendRangePct;
         var maxAdjust = _options.BidMaxAdjust;
@@ -75,31 +78,19 @@ public class BidSuggestionService
                 ? Math.Clamp((p + range) / (2 * range), 0, 1)
                 : 0.5;
 
-            // performance_score: comparativo con el mercado.
-            double? perfScore = null;
+            // performance_score: comparativo con el mercado. Solo cuenta si el
+            // jugador tiene partidos Y hay dispersión de medias en el mercado.
             double? playerAvg = null;
-            var limited = false;
+            int? playerWeeks = null;
+            if (avg.TryGetValue(m.ExternalId, out var a)) { playerAvg = a.Avg; playerWeeks = a.Weeks; }
 
-            if (hasAnyPoints)
-            {
-                if (avg.TryGetValue(m.ExternalId, out var a))
-                {
-                    playerAvg = a.Avg;
-                    perfScore = max > min ? (a.Avg - min) / (max - min) : 0.5; // min==max -> neutro
-                    if (a.Weeks < _options.BidRecentWeeks) limited = true;
-                }
-                else
-                {
-                    perfScore = 0.5;                    // en el mercado con datos pero sin los suyos
-                    limited = true;
-                }
-            }
-            else
-            {
-                limited = true;                         // pretemporada / sin stats: solo tendencia
-            }
+            double? perfScore = haveSpread && playerAvg.HasValue
+                ? (playerAvg.Value - min) / (max - min)
+                : null;
 
+            // Sin componente de rendimiento => la puja es 100% tendencia de precio.
             var combined = perfScore is double ps ? 0.5 * ps + 0.5 * trendScore : trendScore;
+            var limited = perfScore is null || (playerWeeks is int w && w < _options.BidRecentWeeks);
             var bid = (long)Math.Round(price * (1 + (combined - 0.5) * 2 * maxAdjust));
 
             result[m.ExternalId] = new BidSuggestionResponse(
