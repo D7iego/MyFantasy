@@ -41,8 +41,16 @@ public class FantasyOptions
     /// <summary>Rango de referencia (±%) del delta semanal para el price_trend_score.</summary>
     public double BidPriceTrendRangePct { get; set; } = 10.0;
 
-    /// <summary>Ajuste máximo (±) sobre el precio actual según el score combinado.</summary>
-    public double BidMaxAdjust { get; set; } = 0.15;
+    /// <summary>Máximo % POR DEBAJO del valor para un jugador flojo/en caída.</summary>
+    public double BidMaxDrop { get; set; } = 0.10;
+
+    /// <summary>Recompra de la liga al vender (hasta +10% del valor): fija el techo
+    /// "seguro" de puja, porque hasta ahí se recupera revendiendo el jugador.</summary>
+    public double BidSellBackPct { get; set; } = 0.10;
+
+    /// <summary>Prima extra por encima del techo de reventa cuando el momentum es
+    /// muy fuerte (apuesta a que el precio siga subiendo).</summary>
+    public double BidMomentumPremium { get; set; } = 0.05;
 
     public FantasyAuthOptions Auth { get; set; } = new();
 
