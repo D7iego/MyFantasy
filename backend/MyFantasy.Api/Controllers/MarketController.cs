@@ -96,8 +96,14 @@ public class MarketController : ControllerBase
         .ToList();
 
         // 3b) Puja sugerida (heurística) para todo el mercado a la vez.
-        var bids = await _bids.BuildAsync(
-            market.Select(m => new MarketMember(m.ExternalId, m.CurrentValue, m.WeeklyDelta)).ToList(), ct);
+        var members = byExt.Values.Select(item =>
+        {
+            var ext = item.ResolvedExternalId!;
+            playerByExt.TryGetValue(ext, out var player);
+            var d = DeltaFor(player);
+            return new MarketMember(ext, d?.CurrentValue ?? item.ResolvedMarketValue, d?.RecentTrendPct);
+        }).ToList();
+        var bids = await _bids.BuildAsync(members, ct);
         market = market
             .Select(m => bids.TryGetValue(m.ExternalId, out var b) ? m with { Bid = b } : m)
             .ToList();

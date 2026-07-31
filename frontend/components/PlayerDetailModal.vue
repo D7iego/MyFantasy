@@ -170,7 +170,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                   <div class="text-right text-xs">
                     <div class="text-muted">Media últ. 5</div>
                     <div class="font-bold tabular-nums">{{ openBid.avgPointsLast5 != null ? openBid.avgPointsLast5.toFixed(1) + ' pts' : '—' }}</div>
-                    <div class="mt-1 text-muted">Precio semana</div>
+                    <div class="mt-1 text-muted">Tendencia precio</div>
                     <div class="font-bold tabular-nums" :class="deltaClass(openBid.weeklyPct)">
                       {{ openBid.weeklyPct != null ? (openBid.weeklyPct > 0 ? '+' : '') + openBid.weeklyPct + '%' : '—' }}
                     </div>
