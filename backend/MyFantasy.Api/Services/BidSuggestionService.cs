@@ -15,7 +15,9 @@ public record MarketMember(string ExternalId, long? CurrentValue, long? WeeklyDe
 ///    respecto al resto del mercado de HOY (performance_score, comparativo).
 ///  - tendencia de precio: el delta semanal % del propio jugador contra un rango
 ///    de referencia fijo (price_trend_score, NO comparativo).
-/// La puja = precio_actual ajustado ±BidMaxAdjust según lo bueno que sea el score.
+/// La puja se ancla en la RECOMPRA de la liga: como al vender te dan hasta +10%
+/// del valor, ese es el techo "seguro". combined 0..1 mapea de -BidMaxDrop (flojo)
+/// a +BidSellBackPct+BidMomentumPremium (fuerte, apostando a que siga subiendo).
 /// Se calcula para TODO el mercado a la vez (performance es comparativo) y se
 /// cachea la parte de puntos por jornada, que solo cambia al cerrarse una jornada.
 /// </summary>
@@ -61,7 +63,9 @@ public class BidSuggestionService
         var haveSpread = haveRange && max > min;
 
         var range = _options.BidPriceTrendRangePct;
-        var maxAdjust = _options.BidMaxAdjust;
+        // combined 0..1 mapea linealmente de -BidMaxDrop a +(reventa + prima momentum).
+        var upside = _options.BidSellBackPct + _options.BidMomentumPremium;
+        var span = _options.BidMaxDrop + upside;
 
         foreach (var m in market)
         {
@@ -91,7 +95,10 @@ public class BidSuggestionService
             // Sin componente de rendimiento => la puja es 100% tendencia de precio.
             var combined = perfScore is double ps ? 0.5 * ps + 0.5 * trendScore : trendScore;
             var limited = perfScore is null || (playerWeeks is int w && w < _options.BidRecentWeeks);
-            var bid = (long)Math.Round(price * (1 + (combined - 0.5) * 2 * maxAdjust));
+
+            // Anclado en la reventa: -drop (flojo) .. +sellBack+prima (fuerte).
+            var lerp = -_options.BidMaxDrop + combined * span;
+            var bid = (long)Math.Round(price * (1 + lerp));
 
             result[m.ExternalId] = new BidSuggestionResponse(
                 AvgPointsLast5: playerAvg is double pa ? Math.Round(pa, 1) : null,
