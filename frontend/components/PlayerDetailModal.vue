@@ -193,8 +193,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 </div>
 
                 <p class="mt-3 text-[11px] leading-snug text-muted">
-                  Estimación orientativa basada en rendimiento reciente y tendencia de precio frente al resto
-                  del mercado de hoy. No es una predicción garantizada.
+                  Estimación orientativa (rendimiento reciente + tendencia de precio). Referencia: la liga te
+                  recompra por hasta +10% del valor, así que hasta ahí la puja es de bajo riesgo. No es una
+                  predicción garantizada.
                   <span v-if="openBid.limitedData" class="text-gold">Datos limitados: sin partidos suficientes, la puja se basa solo en el precio.</span>
                 </p>
               </div>
