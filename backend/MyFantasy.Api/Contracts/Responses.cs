@@ -170,7 +170,9 @@ public record PriceHistoryPointResponse(DateOnly Date, long Value, long? Delta);
 
 /// <summary>Rendimiento en una jornada (de playerStats de la API). Campos opcionales
 /// porque en pretemporada el array llega vacío y la forma exacta se confirmará en liga.</summary>
-public record MatchStatResponse(int? Week, double? Points, int? Goals, int? Assists, int? Minutes);
+public record MatchStatResponse(
+    int? Week, double? Points, int? Goals, int? Assists, int? Minutes,
+    string? HomeTeam, string? AwayTeam, int? HomeGoals, int? AwayGoals, bool? IsHome);
 
 public record PlayerDetailResponse(
     string ExternalId,
@@ -187,7 +189,8 @@ public record PlayerDetailResponse(
     double? AveragePoints,
     IReadOnlyList<PriceHistoryPointResponse> PriceHistory,
     IReadOnlyList<MatchStatResponse> Matches,
-    bool SportsAvailable);
+    bool SportsAvailable,
+    string Season);
 
 // ---- Pestaña Plantilla/Alineación ----
 

@@ -170,11 +170,25 @@ public class PlayersController : ControllerBase
             }
         }
 
-        var stats = detail?.PlayerMaster?.PlayerStats ?? new();
-        var matches = stats
-            .Select(s => new MatchStatResponse(s.ResolvedWeek, s.ResolvedPoints, s.ResolvedGoals, s.Assists, s.ResolvedMinutes))
-            .Where(m => m.Week is not null || m.Points is not null)
-            .OrderByDescending(m => m.Week ?? 0)
+        // Persistimos en BD lo que traiga la API (UPSERT) para conservar histórico
+        // entre temporadas y poder responder aunque la API falle en el futuro.
+        var season = SeasonUtil.Current();
+        var fresh = detail?.PlayerMaster?.PlayerStats ?? new();
+        if (fresh.Count > 0)
+        {
+            await UpsertMatchStatsAsync(id, season, fresh, ct);
+        }
+
+        // Leemos de BD (fuente de verdad): jornadas de la temporada en curso, desc.
+        var stored = await _db.PlayerMatchStats
+            .Where(m => m.PlayerId == id && m.Season == season)
+            .OrderByDescending(m => m.Week)
+            .ToListAsync(ct);
+
+        var matches = stored
+            .Select(m => new MatchStatResponse(
+                m.Week, m.Points, m.Goals, m.Assists, m.Minutes,
+                m.HomeTeam, m.AwayTeam, m.HomeGoals, m.AwayGoals, m.IsHome))
             .ToList();
 
         var pt = detail?.PlayerTeam;
@@ -194,7 +208,44 @@ public class PlayersController : ControllerBase
             AveragePoints: detail?.PlayerMaster?.AveragePoints,
             PriceHistory: history,
             Matches: matches,
-            SportsAvailable: matches.Count > 0));
+            SportsAvailable: matches.Count > 0,
+            Season: season));
+    }
+
+    /// <summary>UPSERT de las stats por jornada que trae la API en la BD local.</summary>
+    private async Task UpsertMatchStatsAsync(int playerId, string season, List<PlayerStatDto> stats, CancellationToken ct)
+    {
+        var existing = await _db.PlayerMatchStats
+            .Where(m => m.PlayerId == playerId && m.Season == season)
+            .ToDictionaryAsync(m => m.Week, ct);
+
+        var now = DateTime.UtcNow;
+        foreach (var s in stats)
+        {
+            var week = s.ResolvedWeek;
+            // Sin jornada no hay clave estable; y en pretemporada el array viene vacío.
+            if (week is null) continue;
+
+            if (!existing.TryGetValue(week.Value, out var row))
+            {
+                row = new PlayerMatchStat { PlayerId = playerId, Season = season, Week = week.Value };
+                _db.PlayerMatchStats.Add(row);
+                existing[week.Value] = row;
+            }
+
+            row.Points = s.ResolvedPoints;
+            row.Goals = s.ResolvedGoals;
+            row.Assists = s.Assists;
+            row.Minutes = s.ResolvedMinutes;
+            row.HomeTeam = s.ResolvedHomeTeam;
+            row.AwayTeam = s.ResolvedAwayTeam;
+            row.HomeGoals = s.ResolvedHomeGoals;
+            row.AwayGoals = s.ResolvedAwayGoals;
+            row.IsHome = s.ResolvedIsHome;
+            row.UpdatedAt = now;
+        }
+
+        await _db.SaveChangesAsync(ct);
     }
 
     /// <summary>Editar manualmente el precio de compra (fallback si la API no lo trae).</summary>

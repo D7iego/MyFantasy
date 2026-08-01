@@ -289,10 +289,50 @@ public class PlayerStatDto
     public int? Minutes { get; set; }
     public int? MinutesPlayed { get; set; }
 
+    // ---- Datos del partido. Forma SIN confirmar (array vacío en pretemporada):
+    // se leen los nombres flat más probables y también un objeto anidado. Todo
+    // opcional; si no viene nada, el frontend oculta el resultado. Al empezar la
+    // liga se ajustan los nombres reales en un único sitio (aquí). ----
+    public MatchInfoDto? Match { get; set; }
+    public MatchInfoDto? MatchInfo { get; set; }
+    public string? LocalTeam { get; set; }
+    public string? VisitorTeam { get; set; }
+    public int? LocalScore { get; set; }
+    public int? VisitorScore { get; set; }
+    public bool? IsLocal { get; set; }
+
     public int? ResolvedWeek => WeekNumber ?? Week;
     public double? ResolvedPoints => TotalPoints ?? Points;
     public int? ResolvedGoals => Goals ?? GoalScored;
     public int? ResolvedMinutes => Minutes ?? MinutesPlayed;
+
+    private MatchInfoDto? M => Match ?? MatchInfo;
+    public string? ResolvedHomeTeam => M?.ResolvedHomeTeam ?? LocalTeam;
+    public string? ResolvedAwayTeam => M?.ResolvedAwayTeam ?? VisitorTeam;
+    public int? ResolvedHomeGoals => M?.ResolvedHomeGoals ?? LocalScore;
+    public int? ResolvedAwayGoals => M?.ResolvedAwayGoals ?? VisitorScore;
+    public bool? ResolvedIsHome => M?.IsLocal ?? IsLocal;
+}
+
+/// <summary>Info del partido asociada a una jornada. Nombres SIN confirmar.</summary>
+public class MatchInfoDto
+{
+    public TeamRefDto? Local { get; set; }
+    public TeamRefDto? Visitor { get; set; }
+    public TeamRefDto? Home { get; set; }
+    public TeamRefDto? Away { get; set; }
+    public string? LocalName { get; set; }
+    public string? VisitorName { get; set; }
+    public int? LocalScore { get; set; }
+    public int? VisitorScore { get; set; }
+    public int? HomeScore { get; set; }
+    public int? AwayScore { get; set; }
+    public bool? IsLocal { get; set; }
+
+    public string? ResolvedHomeTeam => Local?.Name ?? Home?.Name ?? LocalName;
+    public string? ResolvedAwayTeam => Visitor?.Name ?? Away?.Name ?? VisitorName;
+    public int? ResolvedHomeGoals => LocalScore ?? HomeScore;
+    public int? ResolvedAwayGoals => VisitorScore ?? AwayScore;
 }
 
 // ---- Stats por jornada (/stats/v1/.../stats/week/{n}) ----
