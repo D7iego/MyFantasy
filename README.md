@@ -4,7 +4,7 @@ App **personal** de seguimiento de precios de mercado de LaLiga Fantasy y regist
 automático de operaciones de compra/venta (G/P y evolución de precios). Uso local.
 
 - **Backend:** ASP.NET Core Web API (.NET 10) + EF Core + MySQL (Pomelo) — ✅ implementado
-- **Frontend:** Nuxt 3 + Tailwind + ApexCharts — ⏳ siguiente paso
+- **Frontend:** Nuxt 3 + Tailwind + ApexCharts — ✅ implementado
 
 La API C# es la **única** que habla con la API no oficial de LaLiga
 (`https://fantasy-api.llt-services.com`); el frontend solo consumirá `/api/...`.
