@@ -1,6 +1,17 @@
 <script setup lang="ts">
 interface PricePoint { date: string; value: number; delta: number | null }
-interface MatchStat { week: number | null; points: number | null; goals: number | null; assists: number | null; minutes: number | null }
+interface MatchStat {
+  week: number | null
+  points: number | null
+  goals: number | null
+  assists: number | null
+  minutes: number | null
+  homeTeam: string | null
+  awayTeam: string | null
+  homeGoals: number | null
+  awayGoals: number | null
+  isHome: boolean | null
+}
 interface PlayerDetail {
   externalId: string
   name: string
@@ -17,6 +28,7 @@ interface PlayerDetail {
   priceHistory: PricePoint[]
   matches: MatchStat[]
   sportsAvailable: boolean
+  season: string
 }
 
 const api = useApi()
@@ -29,13 +41,15 @@ const detail = ref<PlayerDetail | null>(null)
 const pending = ref(false)
 const failed = ref(false)
 const page = ref(0)
-const PAGE = 7
-const activeTab = ref<'bid' | 'price'>('price')
+const matchPage = ref(0)
+const PAGE = 5
+const activeTab = ref<'bid' | 'stats' | 'price'>('price')
 
 watch(openPlayerId, async (id) => {
   detail.value = null
   failed.value = false
   page.value = 0
+  matchPage.value = 0
   // Si se abrió desde Mercado (hay puja), la pestaña por defecto es la de puja.
   activeTab.value = openBid.value ? 'bid' : 'price'
   if (id == null) return
@@ -49,8 +63,35 @@ watch(openPlayerId, async (id) => {
   }
 })
 
+// ---- Histórico de precios (paginado 5) ----
 const pages = computed(() => Math.max(1, Math.ceil((detail.value?.priceHistory.length || 0) / PAGE)))
 const pricePage = computed(() => (detail.value?.priceHistory || []).slice(page.value * PAGE, page.value * PAGE + PAGE))
+
+// ---- Partidos (paginado 5) + totales de temporada ----
+const matchPages = computed(() => Math.max(1, Math.ceil((detail.value?.matches.length || 0) / PAGE)))
+const matchSlice = computed(() => (detail.value?.matches || []).slice(matchPage.value * PAGE, matchPage.value * PAGE + PAGE))
+
+const totals = computed(() => {
+  const ms = detail.value?.matches || []
+  const sum = (pick: (m: MatchStat) => number | null) => ms.reduce((a, m) => a + (pick(m) ?? 0), 0)
+  const pointsSum = sum(m => m.points)
+  return {
+    played: ms.length,
+    goals: sum(m => m.goals),
+    assists: sum(m => m.assists),
+    minutes: sum(m => m.minutes),
+    points: detail.value?.points ?? (ms.length ? Math.round(pointsSum) : null),
+    avg: detail.value?.averagePoints ?? (ms.length ? pointsSum / ms.length : null)
+  }
+})
+
+const abbr = (n: string | null) => n ? n.trim().split(/\s+/).slice(-1)[0].slice(0, 3).toUpperCase() : ''
+const matchResult = (m: MatchStat) => {
+  if (!m.homeTeam || !m.awayTeam) return null
+  const score = m.homeGoals != null && m.awayGoals != null ? `${m.homeGoals}-${m.awayGoals}` : 'vs'
+  return `${abbr(m.homeTeam)} ${score} ${abbr(m.awayTeam)}`
+}
+const pointsClass = (v: number | null) => v == null ? 'text-white' : v > 0 ? 'text-up' : v < 0 ? 'text-down' : 'text-white'
 
 const clauseStatus = computed(() => {
   const d = detail.value
@@ -125,7 +166,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             </div>
           </div>
 
-          <!-- Últimos partidos (info general) -->
+          <!-- Últimos partidos (vista rápida) -->
           <div class="border-t border-white/5 px-5 py-4">
             <div class="section-label mb-2">Últimos partidos</div>
             <div v-if="detail.sportsAvailable" class="flex gap-2.5">
@@ -135,8 +176,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 class="flex-1 rounded-xl bg-ink-700 p-2.5 text-center"
               >
                 <div class="text-[10px] uppercase tracking-wide text-muted">J{{ m.week ?? '?' }}</div>
-                <div class="my-0.5 text-base font-extrabold tabular-nums">{{ m.points ?? '—' }}</div>
-                <div class="text-[11px] text-white/70">{{ m.goals ?? 0 }}⚽ {{ m.assists ?? 0 }}🅰 {{ m.minutes ?? 0 }}′</div>
+                <div class="my-0.5 text-base font-extrabold tabular-nums" :class="pointsClass(m.points)">{{ m.points ?? '—' }}</div>
+                <div class="flex items-center justify-center gap-1.5 text-[11px] text-white/70">
+                  <span class="inline-flex items-center gap-0.5"><StatIcon name="goal" :size="12" class="text-muted" />{{ m.goals ?? 0 }}</span>
+                  <span class="inline-flex items-center gap-0.5"><StatIcon name="assist" :size="12" class="text-muted" />{{ m.assists ?? 0 }}</span>
+                  <span class="inline-flex items-center gap-0.5"><StatIcon name="minutes" :size="12" class="text-muted" />{{ m.minutes ?? 0 }}</span>
+                </div>
               </div>
             </div>
             <div v-else class="py-4 text-center text-sm text-muted">
@@ -144,17 +189,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             </div>
           </div>
 
-          <!-- Pestañas: Puja sugerida / Valor de mercado -->
+          <!-- Barra de pestañas (siempre visible) -->
           <div class="border-t border-white/5">
-            <div v-if="openBid" class="flex gap-2 px-5 pt-3">
+            <div class="flex gap-2 px-5 pt-3">
               <button
-                class="rounded-lg px-3 py-1.5 text-sm font-semibold transition"
-                :class="activeTab === 'bid' ? 'bg-brand/15 text-brand' : 'text-muted hover:text-white'"
+                v-if="openBid"
+                class="tab-btn"
+                :class="activeTab === 'bid' ? 'tab-on' : 'tab-off'"
                 @click="activeTab = 'bid'"
               >Puja sugerida</button>
               <button
-                class="rounded-lg px-3 py-1.5 text-sm font-semibold transition"
-                :class="activeTab === 'price' ? 'bg-brand/15 text-brand' : 'text-muted hover:text-white'"
+                class="tab-btn inline-flex items-center gap-1.5"
+                :class="activeTab === 'stats' ? 'tab-on' : 'tab-off'"
+                @click="activeTab = 'stats'"
+              ><StatIcon name="chart" :size="14" /> Estadísticas</button>
+              <button
+                class="tab-btn"
+                :class="activeTab === 'price' ? 'tab-on' : 'tab-off'"
                 @click="activeTab = 'price'"
               >Valor de mercado</button>
             </div>
@@ -201,11 +252,76 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               </div>
             </div>
 
+            <!-- Panel: Estadísticas -->
+            <div v-if="activeTab === 'stats'" class="px-5 py-4">
+              <div class="section-label mb-3 flex items-center justify-between">
+                <span>Temporada {{ detail.season }}</span>
+                <span v-if="totals.played" class="normal-case tracking-normal text-muted">5 partidos por página</span>
+              </div>
+
+              <template v-if="totals.played">
+                <!-- Totales de temporada -->
+                <div class="mb-4 grid grid-cols-5 gap-2">
+                  <div v-for="t in [
+                    { ic: 'goal', n: totals.goals, cap: 'Goles' },
+                    { ic: 'assist', n: totals.assists, cap: 'Asist.' },
+                    { ic: 'minutes', n: totals.minutes.toLocaleString('es-ES'), cap: 'Minutos' },
+                    { ic: 'points', n: totals.points ?? '—', cap: 'Puntos' },
+                    { ic: 'avg', n: totals.avg != null ? totals.avg.toFixed(1) : '—', cap: 'Media' }
+                  ]" :key="t.cap" class="rounded-xl bg-ink-700 p-2.5 text-center">
+                    <StatIcon :name="(t.ic as any)" :size="18" class="mx-auto mb-1 text-muted" />
+                    <div class="text-base font-extrabold tabular-nums leading-none">{{ t.n }}</div>
+                    <div class="mt-1 text-[9.5px] uppercase tracking-wide text-muted">{{ t.cap }}</div>
+                  </div>
+                </div>
+
+                <!-- Tabla de partidos -->
+                <table class="w-full">
+                  <thead>
+                    <tr class="text-[10px] uppercase tracking-wide text-muted">
+                      <th class="pb-2 text-left font-bold">Jornada</th>
+                      <th class="pb-2 text-right font-bold">Pts</th>
+                      <th class="pb-2 text-right font-bold"><StatIcon name="goal" :size="13" class="ml-auto" /></th>
+                      <th class="pb-2 text-right font-bold"><StatIcon name="assist" :size="13" class="ml-auto" /></th>
+                      <th class="pb-2 text-right font-bold"><StatIcon name="minutes" :size="13" class="ml-auto" /></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="m in matchSlice" :key="m.week ?? Math.random()" class="border-t border-white/5">
+                      <td class="py-2.5 text-left">
+                        <span class="font-bold">J{{ m.week ?? '?' }}</span>
+                        <span v-if="matchResult(m)" class="ml-2 text-[10px] font-semibold text-muted">{{ matchResult(m) }}</span>
+                      </td>
+                      <td class="py-2.5 text-right text-sm font-extrabold tabular-nums" :class="pointsClass(m.points)">
+                        {{ m.points != null ? (m.points > 0 ? '+' : '') + m.points : '—' }}
+                      </td>
+                      <td class="py-2.5 text-right text-sm tabular-nums" :class="m.goals ? 'text-white/90' : 'text-white/25'">{{ m.goals ?? 0 }}</td>
+                      <td class="py-2.5 text-right text-sm tabular-nums" :class="m.assists ? 'text-white/90' : 'text-white/25'">{{ m.assists ?? 0 }}</td>
+                      <td class="py-2.5 text-right text-sm tabular-nums text-white/80">{{ m.minutes ?? 0 }}′</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <div v-if="matchPages > 1" class="mt-3 flex items-center justify-between">
+                  <button class="pager-btn" :disabled="matchPage === 0" @click="matchPage--">‹ Anterior</button>
+                  <span class="text-xs text-muted">{{ matchPage + 1 }} de {{ matchPages }}</span>
+                  <button class="pager-btn" :disabled="matchPage >= matchPages - 1" @click="matchPage++">Siguiente ›</button>
+                </div>
+                <div class="mt-3 text-center text-xs text-muted">
+                  Total: <b class="text-white">{{ totals.played }} {{ totals.played === 1 ? 'partido' : 'partidos' }}</b> disputados
+                </div>
+              </template>
+
+              <div v-else class="py-6 text-center text-sm text-muted">
+                Sin partidos disputados aún · se rellenará al empezar la temporada
+              </div>
+            </div>
+
             <!-- Panel: Valor de mercado -->
-            <div v-if="!openBid || activeTab === 'price'" class="px-5 py-4">
+            <div v-if="activeTab === 'price'" class="px-5 py-4">
               <div class="section-label mb-2 flex items-center justify-between">
                 <span>Valor de mercado</span>
-                <span class="normal-case tracking-normal text-muted">7 por página</span>
+                <span class="normal-case tracking-normal text-muted">5 por página</span>
               </div>
 
               <div v-if="pricePage.length === 0" class="py-6 text-center text-sm text-muted">
@@ -226,10 +342,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                   </span>
                 </div>
 
-                <div class="mt-3 flex items-center justify-between">
+                <div v-if="pages > 1" class="mt-3 flex items-center justify-between">
                   <button class="pager-btn" :disabled="page >= pages - 1" @click="page++">‹ Anterior</button>
                   <span class="text-xs text-muted">{{ page + 1 }} de {{ pages }}</span>
                   <button class="pager-btn" :disabled="page === 0" @click="page--">Siguiente ›</button>
+                </div>
+                <div class="mt-3 text-center text-xs text-muted">
+                  Histórico: <b class="text-white">{{ detail.priceHistory.length }} {{ detail.priceHistory.length === 1 ? 'registro' : 'registros' }}</b>
                 </div>
               </div>
             </div>
@@ -243,5 +362,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 <style scoped>
 .pager-btn {
   @apply rounded-lg border border-white/10 bg-ink-700 px-3 py-1.5 text-xs font-semibold text-white/85 transition hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none;
+}
+.tab-btn {
+  @apply rounded-lg px-3 py-1.5 text-sm font-semibold transition;
+}
+.tab-on {
+  @apply bg-brand/15 text-brand;
+}
+.tab-off {
+  @apply text-muted hover:text-white;
 }
 </style>

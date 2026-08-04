@@ -26,4 +26,7 @@ public class Player
     public string? ImageUrl { get; set; }
 
     public ICollection<PriceSnapshot> PriceSnapshots { get; set; } = new List<PriceSnapshot>();
+
+    /// <summary>Histórico de rendimiento por jornada (goles, asistencias, minutos…).</summary>
+    public ICollection<PlayerMatchStat> MatchStats { get; set; } = new List<PlayerMatchStat>();
 }

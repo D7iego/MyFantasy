@@ -10,6 +10,7 @@ public class AppDbContext : DbContext
     public DbSet<League> Leagues => Set<League>();
     public DbSet<Player> Players => Set<Player>();
     public DbSet<PriceSnapshot> PriceSnapshots => Set<PriceSnapshot>();
+    public DbSet<PlayerMatchStat> PlayerMatchStats => Set<PlayerMatchStat>();
     public DbSet<Holding> Holdings => Set<Holding>();
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<AuthState> AuthStates => Set<AuthState>();
@@ -50,6 +51,19 @@ public class AppDbContext : DbContext
             e.HasKey(x => new { x.PlayerId, x.Date });
             e.HasOne(x => x.Player)
                 .WithMany(p => p.PriceSnapshots)
+                .HasForeignKey(x => x.PlayerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<PlayerMatchStat>(e =>
+        {
+            // PK compuesta para UPSERT por (jugador, temporada, jornada).
+            e.HasKey(x => new { x.PlayerId, x.Season, x.Week });
+            e.Property(x => x.Season).HasMaxLength(9);
+            e.Property(x => x.HomeTeam).HasMaxLength(120);
+            e.Property(x => x.AwayTeam).HasMaxLength(120);
+            e.HasOne(x => x.Player)
+                .WithMany(p => p.MatchStats)
                 .HasForeignKey(x => x.PlayerId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
