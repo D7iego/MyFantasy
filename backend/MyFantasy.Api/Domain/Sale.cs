@@ -26,6 +26,9 @@ public class Sale
     public DateOnly PurchaseDate { get; set; }
     public DateOnly SaleDate { get; set; }
 
+    /// <summary>Temporada en que se cerró la operación ("2026/27").</summary>
+    public string Season { get; set; } = string.Empty;
+
     // ---- Stats congeladas en el momento de la venta ----
 
     /// <summary>Ganancia/pérdida final (SalePrice - PurchasePrice).</summary>

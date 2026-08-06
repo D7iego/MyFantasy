@@ -158,6 +158,14 @@ public class StandingEntryDto
     [JsonConverter(typeof(NumberOrStringConverter))]
     public string? UserId { get; set; }
     public TeamStandingDto? Team { get; set; }
+
+    // Puntos del manager. Nombres SIN confirmar (array/forma varía en pretemporada);
+    // se leen los más probables y el resolver casca al primero no nulo.
+    public double? Points { get; set; }
+    public double? TotalPoints { get; set; }
+
+    public double? ResolvedPoints => Team?.ResolvedPoints ?? Points ?? TotalPoints;
+    public long? ResolvedTeamValue => Team?.TeamValue;
 }
 
 public class TeamStandingDto
@@ -169,6 +177,10 @@ public class TeamStandingDto
     public string? UserId { get; set; }
     public ManagerDto? Manager { get; set; }
     public long? TeamValue { get; set; }
+    public double? Points { get; set; }
+    public double? TotalPoints { get; set; }
+
+    public double? ResolvedPoints => Points ?? TotalPoints;
 }
 
 public class UserMeDto

@@ -35,6 +35,8 @@ const posShort = (p: string) =>
 // Ordenación de la tabla de vendidos
 const sSortKey = ref<string>('saleDate')
 const sSortDir = ref<'asc' | 'desc'>('desc')
+const salesPage = ref(0)
+const SALES_PAGE = 7
 const setSalesSort = (key: string) => {
   if (sSortKey.value === key) {
     sSortDir.value = sSortDir.value === 'asc' ? 'desc' : 'asc'
@@ -42,6 +44,7 @@ const setSalesSort = (key: string) => {
     sSortKey.value = key
     sSortDir.value = key === 'name' ? 'asc' : 'desc'
   }
+  salesPage.value = 0
 }
 const sortedSales = computed(() => {
   const arr = [...(sales.value || [])]
@@ -55,6 +58,10 @@ const sortedSales = computed(() => {
     return (av - bv) * mul
   })
 })
+const salesPages = computed(() => Math.max(1, Math.ceil(sortedSales.value.length / SALES_PAGE)))
+const salesPageRows = computed(() =>
+  sortedSales.value.slice(salesPage.value * SALES_PAGE, salesPage.value * SALES_PAGE + SALES_PAGE)
+)
 </script>
 
 <template>
@@ -113,7 +120,7 @@ const sortedSales = computed(() => {
               </tr>
             </thead>
             <tbody class="divide-y divide-ink-900/5">
-              <tr v-for="s in sortedSales" :key="s.id" class="hover:bg-ink-900/[0.02]">
+              <tr v-for="s in salesPageRows" :key="s.id" class="hover:bg-ink-900/[0.02]">
                 <td class="px-4 py-3">
                   <div class="font-semibold text-ink-900">{{ s.name }}</div>
                   <div class="text-xs text-ink-600">{{ posShort(s.position) }} · {{ s.team || '—' }}</div>
@@ -130,7 +137,20 @@ const sortedSales = computed(() => {
             </tbody>
           </table>
         </div>
+
+        <!-- Paginación (7 por página) -->
+        <div v-if="salesPages > 1" class="flex items-center justify-between border-t border-ink-900/10 px-4 py-3">
+          <button class="sales-pager" :disabled="salesPage === 0" @click="salesPage--">‹ Anterior</button>
+          <span class="text-xs text-ink-600">{{ salesPage + 1 }} de {{ salesPages }} · {{ sortedSales.length }} ventas</span>
+          <button class="sales-pager" :disabled="salesPage >= salesPages - 1" @click="salesPage++">Siguiente ›</button>
+        </div>
       </div>
     </template>
   </section>
 </template>
+
+<style scoped>
+.sales-pager {
+  @apply rounded-lg border border-ink-900/15 bg-white px-3 py-1.5 text-xs font-semibold text-ink-900 transition hover:bg-ink-900/[0.04] disabled:opacity-40 disabled:pointer-events-none;
+}
+</style>

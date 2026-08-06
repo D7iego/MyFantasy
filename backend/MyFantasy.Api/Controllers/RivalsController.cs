@@ -39,15 +39,20 @@ public class RivalsController : ControllerBase
             return Ok(new RivalsResponse(Array.Empty<RivalManagerResponse>(), null, null));
 
         var standing = await _api.GetLeagueStandingAsync(league.ExternalId, ct);
+        // El rank es la posición en la clasificación: la API la devuelve ya ordenada,
+        // así que usamos el índice (1 = líder) sin depender de un campo de posición.
         var managers = standing
-            .Select(e => new
+            .Select((e, i) => new
             {
                 TeamId = e.Team?.Id ?? e.Id,
                 Manager = e.Team?.Manager?.ManagerName ?? e.Name ?? "Manager",
-                TeamName = e.Team?.Name ?? e.Name
+                TeamName = e.Team?.Name ?? e.Name,
+                Rank = i + 1,
+                Points = e.ResolvedPoints,
+                TeamValue = e.ResolvedTeamValue
             })
             .Where(m => !string.IsNullOrWhiteSpace(m.TeamId))
-            .Select(m => new RivalManagerResponse(m.TeamId!, m.Manager, m.TeamName))
+            .Select(m => new RivalManagerResponse(m.TeamId!, m.Manager, m.TeamName, m.Rank, m.Points, m.TeamValue))
             .ToList();
 
         if (string.IsNullOrWhiteSpace(teamId))
