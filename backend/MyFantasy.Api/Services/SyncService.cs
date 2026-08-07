@@ -92,6 +92,11 @@ public class SyncService
             await EnrichPurchasePricesFromActivityAsync(league, myManagerId, season, ct);
             await _db.SaveChangesAsync(ct);
 
+            // 6) Precio de venta REAL desde el feed (clausulazo o venta por oferta de
+            //    La Liga): el valor de mercado del día NO es el importe cobrado.
+            await EnrichSalePricesFromActivityAsync(league, season, ct);
+            await _db.SaveChangesAsync(ct);
+
             var active = await _db.Holdings.CountAsync(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active && h.Season == season, ct);
             return new SyncResult(true, league.Name, snapshotted, newHoldings, newSales, active);
         }
@@ -235,6 +240,73 @@ public class SyncService
         if (updated > 0) _logger.LogInformation("Precios de compra reales aplicados a {N} jugadores.", updated);
         return updated;
     }
+
+    /// <summary>
+    /// Corrige el precio de venta de las operaciones cerradas usando el importe
+    /// REAL del feed de actividad (clausulazo o venta por oferta de La Liga), en
+    /// vez del valor de mercado del día. Casa por jugador: coge el movimiento con
+    /// importe más reciente POSTERIOR a la compra (así distingue la venta del
+    /// fichaje original). Solo toca ventas no editadas a mano.
+    /// </summary>
+    private async Task<int> EnrichSalePricesFromActivityAsync(League league, string season, CancellationToken ct)
+    {
+        var sales = await _db.Sales
+            .Include(s => s.Player)
+            .Where(s => s.LeagueId == league.Id && s.Season == season && !s.SalePriceIsManual && s.Player != null)
+            .ToListAsync(ct);
+        if (sales.Count == 0) return 0;
+
+        // Movimientos con importe por jugador (externalId -> lista de (fecha, importe)).
+        var moneyTypes = _options.PurchaseActivityTypeIds.ToHashSet();
+        var byPlayer = new Dictionary<string, List<(DateOnly Date, long Amount)>>();
+        try
+        {
+            for (var i = 0; i < _options.ActivityPagesToScan; i++)
+            {
+                var page = await _api.GetLeagueActivityAsync(league.ExternalId, i, ct);
+                if (page.Count == 0) break;
+                foreach (var e in page)
+                {
+                    if (string.IsNullOrWhiteSpace(e.PlayerMasterId) || e.Amount is null || e.ActivityTypeId is null) continue;
+                    if (!moneyTypes.Contains(e.ActivityTypeId.Value)) continue;
+                    var d = ParseActivityDate(e.CreatedAt);
+                    if (d is null) continue;
+                    if (!byPlayer.TryGetValue(e.PlayerMasterId!, out var list))
+                        byPlayer[e.PlayerMasterId!] = list = new();
+                    list.Add((d.Value, e.Amount.Value));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "No se pudo enriquecer precios de venta desde la actividad.");
+            return 0;
+        }
+
+        var updated = 0;
+        foreach (var s in sales)
+        {
+            if (!byPlayer.TryGetValue(s.Player!.ExternalId, out var moves)) continue;
+            // La venta = el movimiento con importe posterior a la compra más cercano
+            // a (y no posterior a) la fecha de venta. Descarta el fichaje original.
+            var sale = moves
+                .Where(m => m.Date > s.PurchaseDate && m.Date <= s.SaleDate)
+                .OrderByDescending(m => m.Date)
+                .Select(m => (long?)m.Amount)
+                .FirstOrDefault();
+            if (sale is null || sale.Value == s.SalePrice) continue;
+
+            s.SalePrice = sale.Value;
+            s.ProfitLoss = sale.Value - s.PurchasePrice;
+            updated++;
+        }
+        if (updated > 0) _logger.LogInformation("Precios de venta reales aplicados a {N} operaciones.", updated);
+        return updated;
+    }
+
+    /// <summary>Parsea la fecha ISO del feed de actividad a DateOnly (o null).</summary>
+    private static DateOnly? ParseActivityDate(string? raw)
+        => DateTimeOffset.TryParse(raw, out var dto) ? DateOnly.FromDateTime(dto.DateTime) : null;
 
     private async Task<Dictionary<string, string>> LoadTeamsMapAsync(CancellationToken ct)
     {
