@@ -140,8 +140,12 @@ public record TeamResponse(string Id, string Name, string? BadgeUrl);
 
 // ---- Pestaña Rivales (plantillas de otros managers) ----
 
-/// <summary>Manager de la liga (para el selector de la pestaña Rivales).</summary>
-public record RivalManagerResponse(string TeamId, string ManagerName, string? TeamName);
+/// <summary>Manager de la liga (tarjeta de perfil en la pestaña Rivales).
+/// <paramref name="Rank"/> es la posición en la clasificación (1 = líder), por
+/// orden de la API. <paramref name="Points"/> puede ser null en pretemporada.</summary>
+public record RivalManagerResponse(
+    string TeamId, string ManagerName, string? TeamName,
+    int Rank, double? Points, long? TeamValue);
 
 /// <summary>Jugador en la plantilla de un rival: valor, deltas y estado de cláusula.</summary>
 public record RivalPlayerResponse(
@@ -174,6 +178,15 @@ public record MatchStatResponse(
     int? Week, double? Points, int? Goals, int? Assists, int? Minutes,
     string? HomeTeam, string? AwayTeam, int? HomeGoals, int? AwayGoals, bool? IsHome);
 
+/// <summary>Operación (compra/venta) del usuario sobre este jugador, para marcarla
+/// junto a la fecha del histórico de precios. <paramref name="Type"/> = "buy" | "sell".</summary>
+public record PlayerTradeMarkerResponse(DateOnly Date, string Type, long Price);
+
+/// <summary>Próximo rival del equipo del jugador (del calendario). <paramref name="IsHome"/>
+/// = el equipo del jugador juega como local.</summary>
+public record UpcomingMatchResponse(
+    int Week, string? OpponentId, string? OpponentName, string? OpponentBadgeUrl, bool IsHome, string? Date);
+
 public record PlayerDetailResponse(
     string ExternalId,
     string Name,
@@ -190,7 +203,8 @@ public record PlayerDetailResponse(
     IReadOnlyList<PriceHistoryPointResponse> PriceHistory,
     IReadOnlyList<MatchStatResponse> Matches,
     bool SportsAvailable,
-    string Season);
+    string Season,
+    IReadOnlyList<PlayerTradeMarkerResponse> Trades);
 
 // ---- Pestaña Plantilla/Alineación ----
 

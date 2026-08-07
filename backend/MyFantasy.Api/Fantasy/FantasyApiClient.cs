@@ -78,6 +78,12 @@ public class FantasyApiClient : IFantasyApiClient
     public Task<IReadOnlyList<WeekStatDto>> GetWeekStatsAsync(int week, CancellationToken ct = default)
         => GetListAsync<WeekStatDto>(StatsRoute(_options.Endpoints.WeekStats, weekNumber: week.ToString()), ct);
 
+    public Task<CurrentWeekDto?> GetCurrentWeekMainAsync(CancellationToken ct = default)
+        => GetObjectAsync<CurrentWeekDto>(Route(_options.Endpoints.WeekCurrentMain), ct);
+
+    public Task<IReadOnlyList<CalendarMatchDto>> GetCalendarAsync(int week, CancellationToken ct = default)
+        => GetListAsync<CalendarMatchDto>(Route(_options.Endpoints.Calendar, weekNumber: week.ToString()), ct);
+
     // ---- Infra ----
 
     /// <summary>Como <see cref="Route"/> pero con el host de stats (StatsBaseUrl).</summary>

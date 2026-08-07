@@ -1,5 +1,14 @@
 <script setup lang="ts">
 interface PricePoint { date: string; value: number; delta: number | null }
+interface TradeMarker { date: string; type: 'buy' | 'sell'; price: number }
+interface UpcomingMatch {
+  week: number
+  opponentId: string | null
+  opponentName: string | null
+  opponentBadgeUrl: string | null
+  isHome: boolean
+  date: string | null
+}
 interface MatchStat {
   week: number | null
   points: number | null
@@ -29,6 +38,7 @@ interface PlayerDetail {
   matches: MatchStat[]
   sportsAvailable: boolean
   season: string
+  trades: TradeMarker[]
 }
 
 const api = useApi()
@@ -43,13 +53,22 @@ const failed = ref(false)
 const page = ref(0)
 const matchPage = ref(0)
 const PAGE = 5
-const activeTab = ref<'bid' | 'stats' | 'price'>('price')
+const activeTab = ref<'bid' | 'stats' | 'price' | 'upcoming'>('price')
+const selectedMatch = ref<MatchStat | null>(null)
+const upcoming = ref<UpcomingMatch[] | null>(null)
+const loadingUpcoming = ref(false)
+const priceView = ref<'list' | 'chart'>('list')
+const chartRange = ref<'1w' | '1m' | 'all'>('1m')
 
 watch(openPlayerId, async (id) => {
   detail.value = null
   failed.value = false
   page.value = 0
   matchPage.value = 0
+  selectedMatch.value = null
+  upcoming.value = null
+  priceView.value = 'list'
+  chartRange.value = '1m'
   // Si se abrió desde Mercado (hay puja), la pestaña por defecto es la de puja.
   activeTab.value = openBid.value ? 'bid' : 'price'
   if (id == null) return
@@ -92,6 +111,92 @@ const matchResult = (m: MatchStat) => {
   return `${abbr(m.homeTeam)} ${score} ${abbr(m.awayTeam)}`
 }
 const pointsClass = (v: number | null) => v == null ? 'text-white' : v > 0 ? 'text-up' : v < 0 ? 'text-down' : 'text-white'
+
+// Marcas de compra/venta indexadas por fecha (para el histórico de precios).
+const tradesByDate = computed(() => {
+  const map: Record<string, TradeMarker[]> = {}
+  for (const t of detail.value?.trades || []) (map[t.date] ??= []).push(t)
+  return map
+})
+
+// Al cambiar de pestaña se sale del detalle de un partido; y al entrar en
+// "Próximos" se cargan los rivales del calendario (perezoso, una sola vez).
+watch(activeTab, async (tab) => {
+  selectedMatch.value = null
+  if (tab === 'upcoming' && upcoming.value === null && !loadingUpcoming.value && openPlayerId.value != null) {
+    loadingUpcoming.value = true
+    try {
+      upcoming.value = await api.get<UpcomingMatch[]>(`/api/players/${openPlayerId.value}/upcoming`)
+    } catch {
+      upcoming.value = []
+    } finally {
+      loadingUpcoming.value = false
+    }
+  }
+})
+
+const teamInitials = (n: string | null) => n ? n.trim().split(/\s+/).map(w => w[0]).join('').slice(0, 3).toUpperCase() : '?'
+const upcomingColor = (id: string | null) => {
+  const palette = ['#0EA5E9', '#DB2777', '#059669', '#D97706', '#7C3AED', '#DC2626']
+  let h = 0
+  for (const c of (id || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return palette[h % palette.length]
+}
+
+// ---- Gráfico de valor de mercado (rango 1 semana / 1 mes / total) ----
+// priceHistory viene descendente (hoy primero); el gráfico lo quiere ascendente.
+const priceAsc = computed(() => [...(detail.value?.priceHistory || [])].reverse())
+const chartData = computed(() => {
+  const asc = priceAsc.value
+  const n = chartRange.value === '1w' ? 7 : chartRange.value === '1m' ? 30 : asc.length
+  return asc.slice(Math.max(0, asc.length - n))
+})
+const chartSummary = computed(() => {
+  const d = chartData.value
+  if (d.length === 0) return null
+  const first = d[0].value, last = d[d.length - 1].value, chg = last - first
+  const pct = first ? (chg / first) * 100 : 0
+  const up = chg >= 0
+  return {
+    last,
+    up,
+    chgText: `${up ? '+' : '−'}${eur(Math.abs(chg))} (${up ? '+' : '−'}${Math.abs(pct).toFixed(1)}%)`,
+    from: d[0].date,
+    to: d[d.length - 1].date
+  }
+})
+const priceSeries = computed(() => [{
+  name: 'Valor',
+  data: chartData.value.map(p => [new Date(p.date).getTime(), p.value])
+}])
+const priceChartOptions = computed(() => {
+  const valByDate = new Map(chartData.value.map(p => [p.date, p.value]))
+  const from = chartData.value[0]?.date
+  const to = chartData.value[chartData.value.length - 1]?.date
+  const points = (detail.value?.trades || [])
+    .filter(t => from && to && t.date >= from && t.date <= to)
+    .map(t => ({
+      x: new Date(t.date).getTime(),
+      y: valByDate.get(t.date) ?? t.price,
+      marker: { size: 5, fillColor: t.type === 'buy' ? '#18C29C' : '#F7C948', strokeColor: '#14161D', strokeWidth: 2 },
+      label: {
+        text: t.type === 'buy' ? 'Compra' : 'Venta', borderColor: 'transparent', offsetY: 0,
+        style: { background: t.type === 'buy' ? '#18C29C' : '#F7C948', color: '#0E0F14', fontSize: '9px', fontWeight: 700 }
+      }
+    }))
+  return {
+    chart: { type: 'area', toolbar: { show: false }, zoom: { enabled: false }, foreColor: '#8B8F9C', fontFamily: 'Sora, sans-serif' },
+    colors: ['#FF3D4D'],
+    stroke: { curve: 'smooth', width: 2.5 },
+    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0, stops: [0, 100] } },
+    dataLabels: { enabled: false },
+    grid: { borderColor: 'rgba(255,255,255,0.06)', padding: { left: 6, right: 6, top: 0 } },
+    xaxis: { type: 'datetime', labels: { datetimeUTC: false, format: 'dd MMM', style: { fontSize: '10px' } }, axisBorder: { show: false }, axisTicks: { show: false }, tooltip: { enabled: false } },
+    yaxis: { labels: { formatter: (v: number) => eur(v, { compact: true }) }, tickAmount: 3 },
+    tooltip: { x: { format: 'dd MMM yyyy' }, y: { formatter: (v: number) => eur(v) } },
+    annotations: { points }
+  }
+})
 
 const clauseStatus = computed(() => {
   const d = detail.value
@@ -208,6 +313,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 :class="activeTab === 'price' ? 'tab-on' : 'tab-off'"
                 @click="activeTab = 'price'"
               >Valor de mercado</button>
+              <button
+                class="tab-btn"
+                :class="activeTab === 'upcoming' ? 'tab-on' : 'tab-off'"
+                @click="activeTab = 'upcoming'"
+              >Próximos</button>
             </div>
 
             <!-- Panel: Puja sugerida -->
@@ -254,6 +364,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
             <!-- Panel: Estadísticas -->
             <div v-if="activeTab === 'stats'" class="px-5 py-4">
+              <!-- Vista general -->
+              <template v-if="!selectedMatch">
               <div class="section-label mb-3 flex items-center justify-between">
                 <span>Temporada {{ detail.season }}</span>
                 <span v-if="totals.played" class="normal-case tracking-normal text-muted">5 partidos por página</span>
@@ -275,7 +387,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                   </div>
                 </div>
 
-                <!-- Tabla de partidos -->
+                <!-- Tabla de partidos (pulsables) -->
                 <table class="w-full">
                   <thead>
                     <tr class="text-[10px] uppercase tracking-wide text-muted">
@@ -284,10 +396,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                       <th class="pb-2 text-right font-bold"><StatIcon name="goal" :size="13" class="ml-auto" /></th>
                       <th class="pb-2 text-right font-bold"><StatIcon name="assist" :size="13" class="ml-auto" /></th>
                       <th class="pb-2 text-right font-bold"><StatIcon name="minutes" :size="13" class="ml-auto" /></th>
+                      <th class="w-4 pb-2"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="m in matchSlice" :key="m.week ?? Math.random()" class="border-t border-white/5">
+                    <tr
+                      v-for="m in matchSlice"
+                      :key="m.week ?? Math.random()"
+                      class="cursor-pointer border-t border-white/5 transition hover:bg-white/5"
+                      @click="selectedMatch = m"
+                    >
                       <td class="py-2.5 text-left">
                         <span class="font-bold">J{{ m.week ?? '?' }}</span>
                         <span v-if="matchResult(m)" class="ml-2 text-[10px] font-semibold text-muted">{{ matchResult(m) }}</span>
@@ -298,6 +416,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                       <td class="py-2.5 text-right text-sm tabular-nums" :class="m.goals ? 'text-white/90' : 'text-white/25'">{{ m.goals ?? 0 }}</td>
                       <td class="py-2.5 text-right text-sm tabular-nums" :class="m.assists ? 'text-white/90' : 'text-white/25'">{{ m.assists ?? 0 }}</td>
                       <td class="py-2.5 text-right text-sm tabular-nums text-white/80">{{ m.minutes ?? 0 }}′</td>
+                      <td class="py-2.5 pl-2 text-right text-muted">›</td>
                     </tr>
                   </tbody>
                 </table>
@@ -315,26 +434,77 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               <div v-else class="py-6 text-center text-sm text-muted">
                 Sin partidos disputados aún · se rellenará al empezar la temporada
               </div>
+              </template>
+
+              <!-- Detalle de un partido -->
+              <template v-else>
+                <button class="pager-btn mb-3" @click="selectedMatch = null">‹ Volver a estadísticas</button>
+
+                <div class="mb-4 flex items-center justify-between gap-3 rounded-xl bg-gradient-to-b from-brand/15 to-brand/5 p-4">
+                  <div>
+                    <div class="text-[10px] uppercase tracking-wide text-muted">Jornada {{ selectedMatch.week ?? '?' }}</div>
+                    <div v-if="matchResult(selectedMatch)" class="mt-0.5 text-lg font-extrabold">{{ matchResult(selectedMatch) }}</div>
+                    <div v-if="selectedMatch.isHome != null" class="mt-0.5 text-[11px] text-muted">{{ selectedMatch.isHome ? 'Como local' : 'Como visitante' }}</div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-2xl font-extrabold tabular-nums" :class="pointsClass(selectedMatch.points)">
+                      {{ selectedMatch.points != null ? (selectedMatch.points > 0 ? '+' : '') + selectedMatch.points : '—' }}
+                    </div>
+                    <div class="text-[10px] uppercase tracking-wide text-muted">Puntos</div>
+                  </div>
+                </div>
+
+                <div class="section-label mb-2">Rendimiento</div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div v-for="s in [
+                    { ic: 'goal', n: String(selectedMatch.goals ?? 0), cap: 'Goles' },
+                    { ic: 'assist', n: String(selectedMatch.assists ?? 0), cap: 'Asistencias' },
+                    { ic: 'minutes', n: (selectedMatch.minutes ?? 0) + '′', cap: 'Minutos' }
+                  ]" :key="s.cap" class="rounded-xl bg-ink-700 p-3 text-center">
+                    <StatIcon :name="(s.ic as any)" :size="18" class="mx-auto mb-1 text-muted" />
+                    <div class="text-lg font-extrabold tabular-nums leading-none">{{ s.n }}</div>
+                    <div class="mt-1 text-[10px] uppercase tracking-wide text-muted">{{ s.cap }}</div>
+                  </div>
+                </div>
+
+                <p class="mt-3 text-[11px] leading-snug text-muted">
+                  Más detalle del partido (rating, tiros, tarjetas y desglose de puntos) se añadirá cuando la API de LaLiga lo aporte durante la temporada.
+                </p>
+              </template>
             </div>
 
             <!-- Panel: Valor de mercado -->
             <div v-if="activeTab === 'price'" class="px-5 py-4">
-              <div class="section-label mb-2 flex items-center justify-between">
+              <div class="section-label mb-3 flex items-center justify-between">
                 <span>Valor de mercado</span>
-                <span class="normal-case tracking-normal text-muted">5 por página</span>
+                <div class="seg">
+                  <button class="seg-btn" :class="priceView === 'list' ? 'seg-on' : 'seg-off'" @click="priceView = 'list'">Lista</button>
+                  <button class="seg-btn" :class="priceView === 'chart' ? 'seg-on' : 'seg-off'" @click="priceView = 'chart'">Gráfico</button>
+                </div>
               </div>
 
-              <div v-if="pricePage.length === 0" class="py-6 text-center text-sm text-muted">
+              <div v-if="detail.priceHistory.length === 0" class="py-6 text-center text-sm text-muted">
                 Aún no hay histórico. Sincroniza varios días.
               </div>
 
-              <div v-else>
+              <!-- Vista Lista -->
+              <div v-else-if="priceView === 'list'">
                 <div
                   v-for="p in pricePage"
                   :key="p.date"
                   class="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-white/5 py-2 last:border-0"
                 >
-                  <span class="text-sm text-white/80">{{ date(p.date) }}</span>
+                  <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span class="text-sm text-white/80">{{ date(p.date) }}</span>
+                    <span
+                      v-for="(t, i) in (tradesByDate[p.date] || [])"
+                      :key="i"
+                      class="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-extrabold leading-none"
+                      :class="t.type === 'buy' ? 'border-up/40 bg-up/15 text-up' : 'border-gold/40 bg-gold/15 text-gold'"
+                    >
+                      {{ t.type === 'buy' ? '▼ Compra' : '▲ Venta' }} · {{ eur(t.price, { compact: true }) }}
+                    </span>
+                  </div>
                   <span class="text-sm font-semibold tabular-nums">{{ eur(p.value) }}</span>
                   <span class="w-28 text-right text-xs font-bold tabular-nums" :class="deltaClass(p.delta)">
                     <template v-if="p.delta != null">{{ p.delta > 0 ? '▲' : p.delta < 0 ? '▼' : '' }} {{ signed(p.delta) }}</template>
@@ -349,6 +519,77 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 </div>
                 <div class="mt-3 text-center text-xs text-muted">
                   Histórico: <b class="text-white">{{ detail.priceHistory.length }} {{ detail.priceHistory.length === 1 ? 'registro' : 'registros' }}</b>
+                </div>
+              </div>
+
+              <!-- Vista Gráfico -->
+              <div v-else>
+                <div class="mb-3 flex items-end justify-between gap-3">
+                  <div>
+                    <div class="text-xl font-extrabold tabular-nums">{{ eur(chartSummary ? chartSummary.last : detail.currentValue) }}</div>
+                    <div v-if="chartSummary" class="mt-0.5 text-[11px] text-muted">
+                      en el rango:
+                      <span class="font-bold tabular-nums" :class="chartSummary.up ? 'text-up' : 'text-down'">{{ chartSummary.chgText }}</span>
+                    </div>
+                  </div>
+                  <div class="flex gap-1">
+                    <button
+                      v-for="r in [{ k: '1w', l: '1 sem' }, { k: '1m', l: '1 mes' }, { k: 'all', l: 'Total' }]"
+                      :key="r.k"
+                      class="range-btn"
+                      :class="chartRange === r.k ? 'range-on' : ''"
+                      @click="chartRange = (r.k as any)"
+                    >{{ r.l }}</button>
+                  </div>
+                </div>
+
+                <div class="rounded-xl border border-white/5 bg-ink-700 p-2">
+                  <ClientOnly>
+                    <apexchart type="area" height="200" :options="priceChartOptions" :series="priceSeries" />
+                  </ClientOnly>
+                </div>
+                <div v-if="chartSummary" class="mt-2 flex justify-between px-1 text-[10px] text-muted">
+                  <span>{{ date(chartSummary.from) }}</span><span>{{ date(chartSummary.to) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel: Próximos rivales -->
+            <div v-if="activeTab === 'upcoming'" class="px-5 py-4">
+              <div class="section-label mb-3">Próximos partidos<template v-if="detail.team"> · {{ detail.team }}</template></div>
+
+              <div v-if="loadingUpcoming" class="grid h-32 place-items-center">
+                <span class="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              </div>
+
+              <div v-else-if="!upcoming || upcoming.length === 0" class="py-6 text-center text-sm text-muted">
+                Sin partidos programados · el calendario aún no está publicado.
+              </div>
+
+              <div v-else class="space-y-2.5">
+                <div
+                  v-for="m in upcoming"
+                  :key="m.week"
+                  class="flex items-center gap-3 rounded-xl border border-white/5 bg-ink-700 p-3"
+                >
+                  <div class="relative grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white/5">
+                    <span class="text-xs font-extrabold" :style="{ color: upcomingColor(m.opponentId) }">{{ teamInitials(m.opponentName) }}</span>
+                    <img
+                      v-if="m.opponentBadgeUrl"
+                      :src="m.opponentBadgeUrl"
+                      :alt="m.opponentName || ''"
+                      class="absolute inset-0 h-full w-full rounded-lg object-contain p-0.5"
+                      @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
+                    />
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate font-bold">{{ m.opponentName || '—' }}</div>
+                    <div class="text-[11px] text-muted">Jornada {{ m.week }}<template v-if="m.date"> · {{ date(m.date) }}</template></div>
+                  </div>
+                  <span
+                    class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-extrabold"
+                    :class="m.isHome ? 'border-up/40 bg-up/15 text-up' : 'border-white/15 bg-white/5 text-white/80'"
+                  >{{ m.isHome ? '🏠 Casa' : '✈ Fuera' }}</span>
                 </div>
               </div>
             </div>
@@ -371,5 +612,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .tab-off {
   @apply text-muted hover:text-white;
+}
+.seg {
+  @apply inline-flex rounded-lg border border-white/10 bg-ink-700 p-0.5;
+}
+.seg-btn {
+  @apply rounded-md px-2.5 py-1 text-xs font-bold transition;
+}
+.seg-on {
+  @apply bg-brand text-white;
+}
+.seg-off {
+  @apply text-muted hover:text-white;
+}
+.range-btn {
+  @apply rounded-lg border border-white/10 bg-ink-700 px-2.5 py-1 text-[11px] font-bold text-muted transition hover:text-white;
+}
+.range-on {
+  @apply border-brand/40 bg-brand/15 text-brand;
 }
 </style>

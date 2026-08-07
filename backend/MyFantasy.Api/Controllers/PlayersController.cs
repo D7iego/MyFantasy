@@ -41,9 +41,10 @@ public class PlayersController : ControllerBase
         var league = await _leagues.GetDefaultLeagueAsync(ct);
         if (league is null) return Ok(Array.Empty<HoldingResponse>());
 
+        var season = SeasonUtil.Current();
         var holdings = await _db.Holdings
             .Include(h => h.Player)
-            .Where(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active)
+            .Where(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active && h.Season == season)
             .ToListAsync(ct);
 
         var deltas = await _deltas.GetDeltasBulkAsync(holdings.Select(h => h.PlayerId).ToList(), ct);
@@ -191,6 +192,51 @@ public class PlayersController : ControllerBase
                 m.HomeTeam, m.AwayTeam, m.HomeGoals, m.AwayGoals, m.IsHome))
             .ToList();
 
+        // Cachea el resumen de temporada del jugador (identidad + agregados) para
+        // poder comparar temporadas sin recomputar. El sync ya rellena equipo/valores;
+        // aquí completamos los agregados de rendimiento cuando hay partidos.
+        if (matches.Count > 0)
+        {
+            var ss = await _db.PlayerSeasonStats.FindAsync([id, season], ct);
+            if (ss is null)
+            {
+                ss = new PlayerSeasonStat { PlayerId = id, Season = season };
+                _db.PlayerSeasonStats.Add(ss);
+            }
+            ss.Team = player.Team;
+            ss.TeamId = player.TeamId;
+            ss.Position = player.Position;
+            ss.Goals = matches.Sum(m => m.Goals ?? 0);
+            ss.Assists = matches.Sum(m => m.Assists ?? 0);
+            ss.Minutes = matches.Sum(m => m.Minutes ?? 0);
+            ss.TotalPoints = detail?.PlayerMaster?.Points ?? matches.Sum(m => m.Points ?? 0);
+            ss.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+        }
+
+        // Marcas de compra/venta del usuario en la liga por defecto (dato local),
+        // para señalarlas junto a la fecha del histórico de precios.
+        var trades = new List<PlayerTradeMarkerResponse>();
+        if (league is not null)
+        {
+            var holdings = await _db.Holdings
+                .Where(h => h.PlayerId == id && h.LeagueId == league.Id && h.Status == HoldingStatus.Active)
+                .Select(h => new { h.PurchaseDate, h.PurchasePrice })
+                .ToListAsync(ct);
+            var salesList = await _db.Sales
+                .Where(s => s.PlayerId == id && s.LeagueId == league.Id)
+                .Select(s => new { s.PurchaseDate, s.PurchasePrice, s.SaleDate, s.SalePrice })
+                .ToListAsync(ct);
+
+            foreach (var h in holdings)
+                trades.Add(new PlayerTradeMarkerResponse(h.PurchaseDate, "buy", h.PurchasePrice));
+            foreach (var s in salesList)
+            {
+                trades.Add(new PlayerTradeMarkerResponse(s.PurchaseDate, "buy", s.PurchasePrice));
+                trades.Add(new PlayerTradeMarkerResponse(s.SaleDate, "sell", s.SalePrice));
+            }
+        }
+
         var pt = detail?.PlayerTeam;
 
         return Ok(new PlayerDetailResponse(
@@ -209,7 +255,8 @@ public class PlayersController : ControllerBase
             PriceHistory: history,
             Matches: matches,
             SportsAvailable: matches.Count > 0,
-            Season: season));
+            Season: season,
+            Trades: trades));
     }
 
     /// <summary>UPSERT de las stats por jornada que trae la API en la BD local.</summary>
@@ -246,6 +293,69 @@ public class PlayersController : ControllerBase
         }
 
         await _db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Próximos rivales del equipo del jugador (para la pestaña "Próximos" del modal).
+    /// Recorre el calendario desde la jornada actual y resuelve rival + casa/fuera.
+    /// Degrada a lista vacía si falta calendario/equipo (p. ej. en pretemporada).
+    /// </summary>
+    [HttpGet("{id:int}/upcoming")]
+    public async Task<ActionResult<IEnumerable<UpcomingMatchResponse>>> Upcoming(int id, [FromQuery] int count = 3, CancellationToken ct = default)
+    {
+        var player = await _db.Players.FindAsync([id], ct);
+        if (player is null) return NotFound(new { error = "Jugador no encontrado" });
+        var teamId = player.TeamId;
+        if (string.IsNullOrWhiteSpace(teamId)) return Ok(Array.Empty<UpcomingMatchResponse>());
+
+        int startWeek;
+        try
+        {
+            var cw = await _api.GetCurrentWeekMainAsync(ct);
+            if (cw?.ResolvedWeek is not int w) return Ok(Array.Empty<UpcomingMatchResponse>());
+            startWeek = w;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Sin jornada actual; no puedo calcular próximos rivales.");
+            return Ok(Array.Empty<UpcomingMatchResponse>());
+        }
+
+        // teams-master para nombre/escudo del rival.
+        var teams = new Dictionary<string, Fantasy.Dtos.TeamRefDto>();
+        try
+        {
+            foreach (var t in await _api.GetTeamsMasterAsync(ct))
+                if (!string.IsNullOrWhiteSpace(t.Id)) teams[t.Id!] = t;
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "teams-master no disponible para próximos rivales."); }
+
+        var result = new List<UpcomingMatchResponse>();
+        // +4 de margen por si alguna jornada no trae partido del equipo (descansos, etc.).
+        for (var w = startWeek; w < startWeek + count + 4 && result.Count < count; w++)
+        {
+            IReadOnlyList<Fantasy.Dtos.CalendarMatchDto> cal;
+            try { cal = await _api.GetCalendarAsync(w, ct); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Calendario jornada {Week} no disponible.", w); continue; }
+
+            var m = cal.FirstOrDefault(x => x.ResolvedLocalId == teamId || x.ResolvedVisitorId == teamId);
+            if (m is null) continue;
+
+            var isHome = m.ResolvedLocalId == teamId;
+            var oppId = isHome ? m.ResolvedVisitorId : m.ResolvedLocalId;
+            var oppEmbedded = isHome ? m.Visitor : m.Local;
+            var opp = oppId is not null && teams.TryGetValue(oppId, out var o) ? o : null;
+
+            result.Add(new UpcomingMatchResponse(
+                Week: m.ResolvedWeek ?? w,
+                OpponentId: oppId,
+                OpponentName: opp?.Name ?? oppEmbedded?.Name ?? oppId,
+                OpponentBadgeUrl: opp?.ResolvedBadgeUrl ?? oppEmbedded?.ResolvedBadgeUrl,
+                IsHome: isHome,
+                Date: m.ResolvedDate));
+        }
+
+        return Ok(result);
     }
 
     /// <summary>Editar manualmente el precio de compra (fallback si la API no lo trae).</summary>

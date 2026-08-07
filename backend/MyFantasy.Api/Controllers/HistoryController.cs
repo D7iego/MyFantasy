@@ -30,9 +30,10 @@ public class HistoryController : ControllerBase
         var league = await _leagues.GetDefaultLeagueAsync(ct);
         if (league is null) return Ok(Array.Empty<HoldingResponse>());
 
+        var season = SeasonUtil.Current();
         var holdings = await _db.Holdings
             .Include(h => h.Player)
-            .Where(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active)
+            .Where(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active && h.Season == season)
             .ToListAsync(ct);
 
         var deltas = await _deltas.GetDeltasBulkAsync(holdings.Select(h => h.PlayerId).ToList(), ct);
@@ -59,9 +60,10 @@ public class HistoryController : ControllerBase
         var league = await _leagues.GetDefaultLeagueAsync(ct);
         if (league is null) return Ok(Array.Empty<SaleResponse>());
 
+        var season = SeasonUtil.Current();
         var sales = await _db.Sales
             .Include(s => s.Player)
-            .Where(s => s.LeagueId == league.Id)
+            .Where(s => s.LeagueId == league.Id && s.Season == season)
             .OrderByDescending(s => s.SaleDate).ThenByDescending(s => s.Id)
             .ToListAsync(ct);
 

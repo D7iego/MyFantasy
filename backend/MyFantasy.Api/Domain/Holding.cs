@@ -30,6 +30,10 @@ public class Holding
 
     public DateOnly PurchaseDate { get; set; }
 
+    /// <summary>Temporada en que se posee ("2026/27"). Permite separar la cartera
+    /// por temporada y no confundir el reseteo de plantilla al cambiar de año.</summary>
+    public string Season { get; set; } = string.Empty;
+
     public HoldingStatus Status { get; set; } = HoldingStatus.Active;
 
     /// <summary>true si el precio de compra se introdujo a mano (no vino de la API).</summary>

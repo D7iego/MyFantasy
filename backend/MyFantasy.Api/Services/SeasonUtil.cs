@@ -11,4 +11,13 @@ public static class SeasonUtil
     }
 
     public static string Current() => Current(DateOnly.FromDateTime(DateTime.UtcNow));
+
+    /// <summary>Fecha de inicio (1 de julio del año de arranque) de la temporada
+    /// que contiene <paramref name="today"/>. Sirve como límite para agrupar
+    /// snapshots/operaciones por temporada.</summary>
+    public static DateOnly StartDate(DateOnly today)
+    {
+        var startYear = today.Month >= 7 ? today.Year : today.Year - 1;
+        return new DateOnly(startYear, 7, 1);
+    }
 }

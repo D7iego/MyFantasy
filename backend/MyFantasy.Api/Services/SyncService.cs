@@ -52,17 +52,22 @@ public class SyncService
                     Warning: "No hay ligas. ¿Está el token configurado y la cuenta tiene ligas?");
             }
 
+            // Temporada en curso: crea/actualiza la fila auxiliar y gestiona el
+            // rollover (cierra la anterior). Todo lo que se cree hoy se etiqueta con ella.
+            var season = SeasonUtil.Current(today);
+            await EnsureSeasonAsync(season, today, ct);
+
             // 2) Feed de mercado -> upsert jugadores + snapshot de hoy.
             //    El feed no trae el equipo embebido: lo resolvemos con teams-master.
             var teamsMap = await LoadTeamsMapAsync(ct);
             var players = await _api.GetAllPlayersAsync(ct);
-            var (playerByExt, snapshotted) = await UpsertPlayersAndSnapshotsAsync(players, today, teamsMap, ct);
+            var (playerByExt, snapshotted) = await UpsertPlayersAndSnapshotsAsync(players, today, season, teamsMap, ct);
 
             // 3) Resolver el equipo del usuario en la liga por defecto.
             var teamId = await ResolveUserTeamIdAsync(league.ExternalId, ct);
             if (teamId is null)
             {
-                var active0 = await _db.Holdings.CountAsync(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active, ct);
+                var active0 = await _db.Holdings.CountAsync(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active && h.Season == season, ct);
                 return new SyncResult(true, league.Name, snapshotted, 0, 0, active0,
                     Warning: "Precios guardados, pero no pude localizar tu equipo en la clasificación (¿token de otra cuenta?). Diff de plantilla omitido.");
             }
@@ -72,7 +77,7 @@ public class SyncService
 
             // 4) Plantilla actual + diff.
             var squad = await _api.GetTeamSquadAsync(league.ExternalId, teamId, ct);
-            var (newHoldings, newSales) = await DiffSquadAsync(league, squad, playerByExt, today, ct);
+            var (newHoldings, newSales) = await DiffSquadAsync(league, squad, playerByExt, today, season, ct);
 
             await _db.SaveChangesAsync(ct);
 
@@ -84,10 +89,10 @@ public class SyncService
                 ?? squad?.Manager?.Id
                 ?? me?.ManagerId ?? me?.AnyId;
             _logger.LogDebug("Enrich precios de compra: managerId={Id}", myManagerId);
-            await EnrichPurchasePricesFromActivityAsync(league, myManagerId, ct);
+            await EnrichPurchasePricesFromActivityAsync(league, myManagerId, season, ct);
             await _db.SaveChangesAsync(ct);
 
-            var active = await _db.Holdings.CountAsync(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active, ct);
+            var active = await _db.Holdings.CountAsync(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active && h.Season == season, ct);
             return new SyncResult(true, league.Name, snapshotted, newHoldings, newSales, active);
         }
         catch (FantasyApiException ex)
@@ -131,6 +136,39 @@ public class SyncService
         await _db.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Garantiza que existe la fila de la temporada en curso y que es la única
+    /// marcada como actual. Si la temporada actual cambió (rollover), cierra la
+    /// anterior (EndsOn + IsCurrent=false). NO borra datos: la cartera y stats de
+    /// la temporada pasada se conservan, y el diff de plantilla (acotado por
+    /// temporada) evita ventas fantasma al resetear la plantilla el nuevo año.
+    /// </summary>
+    private async Task EnsureSeasonAsync(string season, DateOnly today, CancellationToken ct)
+    {
+        var current = await _db.Seasons.FirstOrDefaultAsync(s => s.IsCurrent, ct);
+        if (current is not null && current.Label == season) return; // ya al día
+
+        // Rollover: cerrar la temporada anterior.
+        if (current is not null && current.Label != season)
+        {
+            current.IsCurrent = false;
+            current.EndsOn ??= today;
+            _logger.LogInformation("Rollover de temporada: {Old} -> {New}.", current.Label, season);
+        }
+
+        var row = await _db.Seasons.FindAsync([season], ct);
+        if (row is null)
+        {
+            _db.Seasons.Add(new Season { Label = season, StartsOn = SeasonUtil.StartDate(today), IsCurrent = true });
+        }
+        else
+        {
+            row.IsCurrent = true;
+            row.EndsOn = null;
+        }
+        await _db.SaveChangesAsync(ct);
+    }
+
     /// <summary>Liga marcada por defecto; si ninguna, la primera añadida (menor CreatedAt).</summary>
     private async Task<League?> GetDefaultLeagueAsync(CancellationToken ct)
     {
@@ -143,14 +181,15 @@ public class SyncService
     /// editados a mano) leyendo el feed de actividad de la liga, donde cada
     /// fichaje trae el importe pagado. Casa por playerMasterId + manager.
     /// </summary>
-    private async Task<int> EnrichPurchasePricesFromActivityAsync(League league, string? myManagerId, CancellationToken ct)
+    private async Task<int> EnrichPurchasePricesFromActivityAsync(League league, string? myManagerId, string season, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(myManagerId)) return 0;
 
-        // Solo los estimados (PurchasePriceIsManual==true): respetamos ediciones manuales.
+        // Solo los estimados (PurchasePriceIsManual==true) de la temporada actual:
+        // respetamos ediciones manuales y no tocamos holdings de años anteriores.
         var holdings = await _db.Holdings
             .Include(h => h.Player)
-            .Where(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active && h.PurchasePriceIsManual && h.Player != null)
+            .Where(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active && h.Season == season && h.PurchasePriceIsManual && h.Player != null)
             .ToListAsync(ct);
         if (holdings.Count == 0) return 0;
 
@@ -236,7 +275,8 @@ public class SyncService
     }
 
     private async Task<(Dictionary<string, Player> ByExt, int Snapshotted)> UpsertPlayersAndSnapshotsAsync(
-        IReadOnlyList<FantasyPlayerDto> players, DateOnly today, IReadOnlyDictionary<string, string> teamsMap, CancellationToken ct)
+        IReadOnlyList<FantasyPlayerDto> players, DateOnly today, string season,
+        IReadOnlyDictionary<string, string> teamsMap, CancellationToken ct)
     {
         var byExt = await _db.Players.ToDictionaryAsync(p => p.ExternalId, ct);
 
@@ -285,6 +325,38 @@ public class SyncService
         }
         await _db.SaveChangesAsync(ct);
 
+        // Resumen por temporada (identidad + valores) para poder comparar años.
+        // El equipo/posición pueden cambiar entre temporadas, por eso se guardan
+        // por (jugador, temporada) y no solo en Players (que es mutable).
+        var seasonStats = await _db.PlayerSeasonStats
+            .Where(p => p.Season == season)
+            .ToDictionaryAsync(p => p.PlayerId, ct);
+        var now = DateTime.UtcNow;
+        foreach (var dto in players)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Id)) continue;
+            if (!byExt.TryGetValue(dto.Id!, out var player)) continue;
+            long? val = todaySnaps.TryGetValue(player.Id, out var s) ? s.MarketValue : null;
+
+            if (!seasonStats.TryGetValue(player.Id, out var ss))
+            {
+                ss = new PlayerSeasonStat { PlayerId = player.Id, Season = season, StartValue = val };
+                _db.PlayerSeasonStats.Add(ss);
+                seasonStats[player.Id] = ss;
+            }
+            ss.Team = player.Team;
+            ss.TeamId = player.TeamId;
+            ss.Position = player.Position;
+            if (val is not null)
+            {
+                ss.StartValue ??= val;
+                ss.EndValue = val;
+                ss.PeakValue = ss.PeakValue is long pv ? Math.Max(pv, val.Value) : val;
+            }
+            ss.UpdatedAt = now;
+        }
+        await _db.SaveChangesAsync(ct);
+
         return (byExt, count);
     }
 
@@ -319,7 +391,7 @@ public class SyncService
     }
 
     private async Task<(int NewHoldings, int NewSales)> DiffSquadAsync(
-        League league, TeamSquadDto? squad, Dictionary<string, Player> playerByExt, DateOnly today, CancellationToken ct)
+        League league, TeamSquadDto? squad, Dictionary<string, Player> playerByExt, DateOnly today, string season, CancellationToken ct)
     {
         var squadPlayers = squad?.Players ?? new List<SquadPlayerDto>();
         var ownedExtIds = squadPlayers
@@ -328,9 +400,12 @@ public class SyncService
             .Select(id => id!)
             .ToHashSet();
 
+        // Solo la cartera de ESTA temporada: al cambiar de año el reseteo de
+        // plantilla NO genera ventas fantasma (los holdings del año anterior
+        // quedan como histórico, no se comparan ni se venden).
         var activeHoldings = await _db.Holdings
             .Include(h => h.Player)
-            .Where(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active)
+            .Where(h => h.LeagueId == league.Id && h.Status == HoldingStatus.Active && h.Season == season)
             .ToListAsync(ct);
         var activeByExt = activeHoldings
             .Where(h => h.Player is not null)
@@ -358,6 +433,7 @@ public class SyncService
                 LeagueId = league.Id,
                 PurchasePrice = purchasePrice,
                 PurchaseDate = today,
+                Season = season,
                 Status = HoldingStatus.Active,
                 PurchasePriceIsManual = apiPrice is null
             });
@@ -382,6 +458,7 @@ public class SyncService
                 SalePrice = salePrice,
                 PurchaseDate = holding.PurchaseDate,
                 SaleDate = today,
+                Season = season,
                 ProfitLoss = salePrice - holding.PurchasePrice,
                 DailyDelta = deltas.DailyDelta,
                 WeeklyDelta = deltas.WeeklyDelta,

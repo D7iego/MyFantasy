@@ -51,6 +51,25 @@ El **modal de re-login** aparece solo cuando caduca la sesión de LaLiga (ver m�
 | Tabla | Campos clave |
 |-------|--------------|
 | `Leagues` | `ExternalId`, `Name`, `IsDefault`, `TeamId`, `CreatedAt` |
+| `Players` | `ExternalId`, `Name`, `Team`, `TeamId`, `Position` (fila mutable = estado actual) |
+| `PriceSnapshots` | **PK (`PlayerId`, `Date`)**, `MarketValue` — UPSERT diario (histórico perpetuo) |
+| `Holdings` | `PlayerId`, `LeagueId`, `PurchasePrice`, `PurchaseDate`, `Season`, `Status` |
+| `Sales` | + `SalePrice`, `SaleDate`, `Season`, `ProfitLoss`, `DailyDelta`, `WeeklyDelta` (**congelados**) |
+| `PlayerMatchStats` | **PK (`PlayerId`, `Season`, `Week`)** — rendimiento por jornada + resultado |
+| `PlayerSeasonStats` | **PK (`PlayerId`, `Season`)** — foto por temporada: equipo/posición de ese año + agregados y valores (start/end/peak) |
+| `Seasons` | **PK `Label`** ("2026/27"), `StartsOn`, `EndsOn`, `IsCurrent` — límites de temporada y rollover |
+| `Lineups` | `LeagueId`, `Name`, `Formation`, `Data` — planificador de onces |
+| `AuthStates` | fila única, `RefreshTokenEnc` (token de LaLiga cifrado) |
+
+### Persistencia entre temporadas
+Los datos se **conservan y separan por temporada** para poder comparar años:
+- Cada operación (`Holdings`/`Sales`) y cada stat de jugador (`PlayerMatchStats`,
+  `PlayerSeasonStats`) llevan su `Season`. Los precios (`PriceSnapshots`) se guardan
+  por fecha para siempre.
+- `Seasons` marca la temporada en curso (`IsCurrent`). Al detectar un cambio de
+  temporada (**rollover**), el sync cierra la anterior y arranca la nueva **sin
+  borrar** lo previo; el diff de plantilla se acota a la temporada actual, así que
+  el reseteo de plantilla del nuevo año **no genera ventas fantasma**.
 | `Players` | `ExternalId`, `Name`, `Team`, `TeamId`, `Position`, `ImageUrl` |
 | `PriceSnapshots` | **PK (`PlayerId`, `Date`)**, `MarketValue` — UPSERT diario |
 | `Holdings` | `PlayerId`, `LeagueId`, `PurchasePrice`, `PurchaseDate`, `Status`, `PurchasePriceIsManual` |

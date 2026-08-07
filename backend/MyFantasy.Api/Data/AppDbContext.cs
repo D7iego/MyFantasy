@@ -11,6 +11,8 @@ public class AppDbContext : DbContext
     public DbSet<Player> Players => Set<Player>();
     public DbSet<PriceSnapshot> PriceSnapshots => Set<PriceSnapshot>();
     public DbSet<PlayerMatchStat> PlayerMatchStats => Set<PlayerMatchStat>();
+    public DbSet<Season> Seasons => Set<Season>();
+    public DbSet<PlayerSeasonStat> PlayerSeasonStats => Set<PlayerSeasonStat>();
     public DbSet<Holding> Holdings => Set<Holding>();
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<AuthState> AuthStates => Set<AuthState>();
@@ -68,9 +70,30 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        b.Entity<Season>(e =>
+        {
+            e.HasKey(x => x.Label);
+            e.Property(x => x.Label).HasMaxLength(9);
+        });
+
+        b.Entity<PlayerSeasonStat>(e =>
+        {
+            // PK compuesta: una foto por (jugador, temporada).
+            e.HasKey(x => new { x.PlayerId, x.Season });
+            e.Property(x => x.Season).HasMaxLength(9);
+            e.Property(x => x.Team).HasMaxLength(120);
+            e.Property(x => x.TeamId).HasMaxLength(64);
+            e.Property(x => x.Position).HasConversion<int>();
+            e.HasOne(x => x.Player)
+                .WithMany()
+                .HasForeignKey(x => x.PlayerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         b.Entity<Holding>(e =>
         {
             e.Property(x => x.Status).HasConversion<int>();
+            e.Property(x => x.Season).HasMaxLength(9);
             e.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.PlayerId);
             e.HasOne(x => x.League).WithMany(l => l.Holdings).HasForeignKey(x => x.LeagueId);
             // Un jugador solo puede estar activo una vez por liga.
@@ -79,6 +102,7 @@ public class AppDbContext : DbContext
 
         b.Entity<Sale>(e =>
         {
+            e.Property(x => x.Season).HasMaxLength(9);
             e.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.PlayerId);
             e.HasOne(x => x.League).WithMany(l => l.Sales).HasForeignKey(x => x.LeagueId);
             e.HasIndex(x => new { x.LeagueId, x.SaleDate });
