@@ -117,6 +117,11 @@ public class FantasyEndpoints
     public string PlayerDetail { get; set; } = "/v1/competition/{competitionId}/player/{playerId}/league/{leagueId}";
     public string TeamsMaster { get; set; } = "/v3/teams-master";
 
+    // Calendario (26/27: cada partido trae localId/visitorId) y jornada actual
+    // (host principal, distinta de la de stats). Confirmados en los JS de referencia.
+    public string WeekCurrentMain { get; set; } = "/v1/competition/{competitionId}/week/current";
+    public string Calendar { get; set; } = "/v1/competition/{competitionId}/calendar?weekNumber={weekNumber}";
+
     // Rutas de stats por jornada (bajo StatsBaseUrl, no BaseUrl). SIN confirmar.
     public string CurrentWeek { get; set; } = "/stats/v1/competition/{competitionId}/stats/week/current";
     public string WeekStats { get; set; } = "/stats/v1/competition/{competitionId}/stats/week/{weekNumber}";

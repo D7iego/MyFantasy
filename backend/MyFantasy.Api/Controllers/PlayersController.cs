@@ -295,6 +295,69 @@ public class PlayersController : ControllerBase
         await _db.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Próximos rivales del equipo del jugador (para la pestaña "Próximos" del modal).
+    /// Recorre el calendario desde la jornada actual y resuelve rival + casa/fuera.
+    /// Degrada a lista vacía si falta calendario/equipo (p. ej. en pretemporada).
+    /// </summary>
+    [HttpGet("{id:int}/upcoming")]
+    public async Task<ActionResult<IEnumerable<UpcomingMatchResponse>>> Upcoming(int id, [FromQuery] int count = 3, CancellationToken ct = default)
+    {
+        var player = await _db.Players.FindAsync([id], ct);
+        if (player is null) return NotFound(new { error = "Jugador no encontrado" });
+        var teamId = player.TeamId;
+        if (string.IsNullOrWhiteSpace(teamId)) return Ok(Array.Empty<UpcomingMatchResponse>());
+
+        int startWeek;
+        try
+        {
+            var cw = await _api.GetCurrentWeekMainAsync(ct);
+            if (cw?.ResolvedWeek is not int w) return Ok(Array.Empty<UpcomingMatchResponse>());
+            startWeek = w;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Sin jornada actual; no puedo calcular próximos rivales.");
+            return Ok(Array.Empty<UpcomingMatchResponse>());
+        }
+
+        // teams-master para nombre/escudo del rival.
+        var teams = new Dictionary<string, Fantasy.Dtos.TeamRefDto>();
+        try
+        {
+            foreach (var t in await _api.GetTeamsMasterAsync(ct))
+                if (!string.IsNullOrWhiteSpace(t.Id)) teams[t.Id!] = t;
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "teams-master no disponible para próximos rivales."); }
+
+        var result = new List<UpcomingMatchResponse>();
+        // +4 de margen por si alguna jornada no trae partido del equipo (descansos, etc.).
+        for (var w = startWeek; w < startWeek + count + 4 && result.Count < count; w++)
+        {
+            IReadOnlyList<Fantasy.Dtos.CalendarMatchDto> cal;
+            try { cal = await _api.GetCalendarAsync(w, ct); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Calendario jornada {Week} no disponible.", w); continue; }
+
+            var m = cal.FirstOrDefault(x => x.ResolvedLocalId == teamId || x.ResolvedVisitorId == teamId);
+            if (m is null) continue;
+
+            var isHome = m.ResolvedLocalId == teamId;
+            var oppId = isHome ? m.ResolvedVisitorId : m.ResolvedLocalId;
+            var oppEmbedded = isHome ? m.Visitor : m.Local;
+            var opp = oppId is not null && teams.TryGetValue(oppId, out var o) ? o : null;
+
+            result.Add(new UpcomingMatchResponse(
+                Week: m.ResolvedWeek ?? w,
+                OpponentId: oppId,
+                OpponentName: opp?.Name ?? oppEmbedded?.Name ?? oppId,
+                OpponentBadgeUrl: opp?.ResolvedBadgeUrl ?? oppEmbedded?.ResolvedBadgeUrl,
+                IsHome: isHome,
+                Date: m.ResolvedDate));
+        }
+
+        return Ok(result);
+    }
+
     /// <summary>Editar manualmente el precio de compra (fallback si la API no lo trae).</summary>
     [HttpPut("holdings/{id:int}/purchase-price")]
     public async Task<IActionResult> UpdatePurchasePrice(int id, [FromBody] UpdatePurchasePriceRequest body, CancellationToken ct)

@@ -347,6 +347,29 @@ public class MatchInfoDto
     public int? ResolvedAwayGoals => VisitorScore ?? AwayScore;
 }
 
+// ---- Calendario (/v1/competition/{id}/calendar?weekNumber={n}) ----
+
+/// <summary>Partido del calendario. Temporada 26/27: trae localId/visitorId (ids
+/// de equipo real) en vez de objetos embebidos; se resuelven con teams-master.</summary>
+public class CalendarMatchDto
+{
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? LocalId { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string? VisitorId { get; set; }
+    public TeamRefDto? Local { get; set; }
+    public TeamRefDto? Visitor { get; set; }
+    public int? WeekNumber { get; set; }
+    public int? Week { get; set; }
+    public string? MatchDate { get; set; }
+    public string? Date { get; set; }
+
+    public string? ResolvedLocalId => LocalId ?? Local?.Id;
+    public string? ResolvedVisitorId => VisitorId ?? Visitor?.Id;
+    public int? ResolvedWeek => WeekNumber ?? Week;
+    public string? ResolvedDate => MatchDate ?? Date;
+}
+
 // ---- Stats por jornada (/stats/v1/.../stats/week/{n}) ----
 
 /// <summary>Jornada actual. Forma SIN confirmar; campos permisivos.</summary>

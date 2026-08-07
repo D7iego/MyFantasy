@@ -182,6 +182,11 @@ public record MatchStatResponse(
 /// junto a la fecha del histórico de precios. <paramref name="Type"/> = "buy" | "sell".</summary>
 public record PlayerTradeMarkerResponse(DateOnly Date, string Type, long Price);
 
+/// <summary>Próximo rival del equipo del jugador (del calendario). <paramref name="IsHome"/>
+/// = el equipo del jugador juega como local.</summary>
+public record UpcomingMatchResponse(
+    int Week, string? OpponentId, string? OpponentName, string? OpponentBadgeUrl, bool IsHome, string? Date);
+
 public record PlayerDetailResponse(
     string ExternalId,
     string Name,

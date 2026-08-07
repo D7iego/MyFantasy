@@ -49,4 +49,10 @@ public interface IFantasyApiClient
 
     /// <summary>Estadísticas (puntos Fantasy) de todos los jugadores en una jornada.</summary>
     Task<IReadOnlyList<WeekStatDto>> GetWeekStatsAsync(int week, CancellationToken ct = default);
+
+    /// <summary>Jornada actual (host principal, /v1/.../week/current) para el calendario.</summary>
+    Task<CurrentWeekDto?> GetCurrentWeekMainAsync(CancellationToken ct = default);
+
+    /// <summary>Partidos del calendario de una jornada (con localId/visitorId).</summary>
+    Task<IReadOnlyList<CalendarMatchDto>> GetCalendarAsync(int week, CancellationToken ct = default);
 }

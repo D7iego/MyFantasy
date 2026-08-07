@@ -1,6 +1,14 @@
 <script setup lang="ts">
 interface PricePoint { date: string; value: number; delta: number | null }
 interface TradeMarker { date: string; type: 'buy' | 'sell'; price: number }
+interface UpcomingMatch {
+  week: number
+  opponentId: string | null
+  opponentName: string | null
+  opponentBadgeUrl: string | null
+  isHome: boolean
+  date: string | null
+}
 interface MatchStat {
   week: number | null
   points: number | null
@@ -45,8 +53,10 @@ const failed = ref(false)
 const page = ref(0)
 const matchPage = ref(0)
 const PAGE = 5
-const activeTab = ref<'bid' | 'stats' | 'price'>('price')
+const activeTab = ref<'bid' | 'stats' | 'price' | 'upcoming'>('price')
 const selectedMatch = ref<MatchStat | null>(null)
+const upcoming = ref<UpcomingMatch[] | null>(null)
+const loadingUpcoming = ref(false)
 const priceView = ref<'list' | 'chart'>('list')
 const chartRange = ref<'1w' | '1m' | 'all'>('1m')
 
@@ -56,6 +66,7 @@ watch(openPlayerId, async (id) => {
   page.value = 0
   matchPage.value = 0
   selectedMatch.value = null
+  upcoming.value = null
   priceView.value = 'list'
   chartRange.value = '1m'
   // Si se abrió desde Mercado (hay puja), la pestaña por defecto es la de puja.
@@ -108,8 +119,29 @@ const tradesByDate = computed(() => {
   return map
 })
 
-// Al cambiar de pestaña se sale del detalle de un partido.
-watch(activeTab, () => { selectedMatch.value = null })
+// Al cambiar de pestaña se sale del detalle de un partido; y al entrar en
+// "Próximos" se cargan los rivales del calendario (perezoso, una sola vez).
+watch(activeTab, async (tab) => {
+  selectedMatch.value = null
+  if (tab === 'upcoming' && upcoming.value === null && !loadingUpcoming.value && openPlayerId.value != null) {
+    loadingUpcoming.value = true
+    try {
+      upcoming.value = await api.get<UpcomingMatch[]>(`/api/players/${openPlayerId.value}/upcoming`)
+    } catch {
+      upcoming.value = []
+    } finally {
+      loadingUpcoming.value = false
+    }
+  }
+})
+
+const teamInitials = (n: string | null) => n ? n.trim().split(/\s+/).map(w => w[0]).join('').slice(0, 3).toUpperCase() : '?'
+const upcomingColor = (id: string | null) => {
+  const palette = ['#0EA5E9', '#DB2777', '#059669', '#D97706', '#7C3AED', '#DC2626']
+  let h = 0
+  for (const c of (id || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return palette[h % palette.length]
+}
 
 // ---- Gráfico de valor de mercado (rango 1 semana / 1 mes / total) ----
 // priceHistory viene descendente (hoy primero); el gráfico lo quiere ascendente.
@@ -281,6 +313,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 :class="activeTab === 'price' ? 'tab-on' : 'tab-off'"
                 @click="activeTab = 'price'"
               >Valor de mercado</button>
+              <button
+                class="tab-btn"
+                :class="activeTab === 'upcoming' ? 'tab-on' : 'tab-off'"
+                @click="activeTab = 'upcoming'"
+              >Próximos</button>
             </div>
 
             <!-- Panel: Puja sugerida -->
@@ -513,6 +550,46 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 </div>
                 <div v-if="chartSummary" class="mt-2 flex justify-between px-1 text-[10px] text-muted">
                   <span>{{ date(chartSummary.from) }}</span><span>{{ date(chartSummary.to) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel: Próximos rivales -->
+            <div v-if="activeTab === 'upcoming'" class="px-5 py-4">
+              <div class="section-label mb-3">Próximos partidos<template v-if="detail.team"> · {{ detail.team }}</template></div>
+
+              <div v-if="loadingUpcoming" class="grid h-32 place-items-center">
+                <span class="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              </div>
+
+              <div v-else-if="!upcoming || upcoming.length === 0" class="py-6 text-center text-sm text-muted">
+                Sin partidos programados · el calendario aún no está publicado.
+              </div>
+
+              <div v-else class="space-y-2.5">
+                <div
+                  v-for="m in upcoming"
+                  :key="m.week"
+                  class="flex items-center gap-3 rounded-xl border border-white/5 bg-ink-700 p-3"
+                >
+                  <div class="relative grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white/5">
+                    <span class="text-xs font-extrabold" :style="{ color: upcomingColor(m.opponentId) }">{{ teamInitials(m.opponentName) }}</span>
+                    <img
+                      v-if="m.opponentBadgeUrl"
+                      :src="m.opponentBadgeUrl"
+                      :alt="m.opponentName || ''"
+                      class="absolute inset-0 h-full w-full rounded-lg object-contain p-0.5"
+                      @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
+                    />
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate font-bold">{{ m.opponentName || '—' }}</div>
+                    <div class="text-[11px] text-muted">Jornada {{ m.week }}<template v-if="m.date"> · {{ date(m.date) }}</template></div>
+                  </div>
+                  <span
+                    class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-extrabold"
+                    :class="m.isHome ? 'border-up/40 bg-up/15 text-up' : 'border-white/15 bg-white/5 text-white/80'"
+                  >{{ m.isHome ? '🏠 Casa' : '✈ Fuera' }}</span>
                 </div>
               </div>
             </div>
